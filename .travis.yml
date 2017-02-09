@@ -45,5 +45,5 @@ matrix:
 script:
   - mkdir build
   - cd build
-  - cmake -DCMAKE_CXX_COMPILER=$COMPILER .. && make
+  - cmake -DCMAKE_CXX_COMPILER=$COMPILER -DNCODE_DISABLE_TESTS=OFF -DNCODE_DISABLE_BENCHMARKS=OFF .. && make
   - make test

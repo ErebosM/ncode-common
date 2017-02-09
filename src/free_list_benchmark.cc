@@ -16,7 +16,7 @@ struct Dummy {
 };
 
 using namespace std::chrono;
-using DummyPtr = ncode::FreeList<Dummy>::Pointer;
+using DummyPtr = nc::FreeList<Dummy>::Pointer;
 static constexpr size_t kPasses = 5000;
 
 static uint64_t TestStandardAllocation() {
@@ -24,7 +24,7 @@ static uint64_t TestStandardAllocation() {
   for (size_t i = 0; i < kPasses; ++i) {
     std::vector<std::unique_ptr<Dummy>> values(i);
     for (size_t j = 0; j < i; ++j) {
-      auto dummy_value = ncode::make_unique<Dummy>(i, j);
+      auto dummy_value = nc::make_unique<Dummy>(i, j);
       values[j] = std::move(dummy_value);
     }
   }
@@ -34,7 +34,7 @@ static uint64_t TestStandardAllocation() {
 }
 
 static uint64_t TestFreeList() {
-  ncode::FreeList<Dummy>& free_list = ncode::GetFreeList<Dummy>();
+  nc::FreeList<Dummy>& free_list = nc::GetFreeList<Dummy>();
   auto start = high_resolution_clock::now();
   for (size_t i = 0; i < kPasses; ++i) {
     std::vector<DummyPtr> values(i);
@@ -49,8 +49,8 @@ static uint64_t TestFreeList() {
 }
 
 int main(int argc, char** argv) {
-  ncode::Unused(argc);
-  ncode::Unused(argv);
+  nc::Unused(argc);
+  nc::Unused(argv);
 
   // Will compare the free list vs regular memory allocation.
   uint64_t regular_ms = TestStandardAllocation();
