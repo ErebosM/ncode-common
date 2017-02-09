@@ -334,15 +334,6 @@ class Distribution {
 
   Distribution(std::vector<T>* values, size_t n) {
     quantiles_ = Percentiles(values, n);
-
-    // values is already sorted here by Percentiles()
-    size_t start;
-    if (values->size() >= n) {
-      start = values->size() - n;
-    } else {
-      start = 0;
-    }
-
     for (T value : *values) {
       summary_stats_.Add(value);
     }
