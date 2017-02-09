@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/ngvozdiev/ncode-common.svg?branch=master)](https://travis-ci.org/ngvozdiev/ncode-common)
+
 # What is NCode?
 
 NCode is a small C++11 library that extends STL's functionality with various odds and ends that I find useful. Emphasis is on code clarity and simplicity (no complicated template code). It also contains reusable bits of other projects (mostly protobufs).
