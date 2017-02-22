@@ -186,6 +186,22 @@ std::map<T, double> SumConvolute(const std::map<T, double>& x_probabilities,
   return out;
 }
 
+template <typename T>
+std::map<T, double> SumConvolute(
+    const std::vector<std::map<T, double>>& probabilities) {
+  CHECK(!probabilities.empty());
+  auto it = probabilities.begin();
+
+  std::map<T, double>& current_map = *it;
+  ++it;
+
+  for (;it != probabilities.end(); ++it) {
+    current_map = SumConvolute(current_map, *it);
+  }
+
+  return current_map;
+}
+
 }  // namespace nc
 
 #endif
