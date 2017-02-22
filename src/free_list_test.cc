@@ -87,7 +87,7 @@ struct Derived : Base {
   std::function<void()> on_destruct_derived;
 };
 
-TEST(FreeListSingleton, Hieararchy) {
+TEST(FreeListSingleton, Hierarchy) {
   bool base = false;
   bool derived = false;
   auto dummy_ptr = AllocateFromFreeList<Derived>(

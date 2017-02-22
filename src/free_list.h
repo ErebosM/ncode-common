@@ -84,9 +84,8 @@ class FreeList {
 
         T* const raw_ptr = &(mem[kBatchSize - 1]);
         new (raw_ptr) T(std::forward<Args>(args)...);
-        Pointer return_ptr(raw_ptr, &ReleaseGlobal);
         ++raw_allocation_count_;
-        return std::move(return_ptr);
+        return Pointer(raw_ptr, &ReleaseGlobal);
       }
     }
 
@@ -94,8 +93,7 @@ class FreeList {
     objects_.pop_back();
 
     new (raw_ptr) T(std::forward<Args>(args)...);
-    Pointer return_ptr(raw_ptr, &ReleaseGlobal);
-    return std::move(return_ptr);
+    return Pointer(raw_ptr, &ReleaseGlobal);
   }
 
   // Returns the number of objects that this free list holds.
@@ -152,6 +150,84 @@ FreeList<T>& GetFreeList() {
 template <typename T, typename... Args>
 typename FreeList<T>::Pointer AllocateFromFreeList(Args&&... args) {
   return GetFreeList<T>().New(std::forward<Args>(args)...);
+}
+
+template <typename T>
+class UnsafeFreeList;
+
+template <typename T>
+UnsafeFreeList<T>& GetUnsafeFreeList();
+
+// An unsafe variant of FreeList. Faster, but it is up to the user to make sure
+// the same thread frees objects as the one that allocates them.
+template <typename T>
+class UnsafeFreeList {
+ public:
+  typedef std::unique_ptr<T, std::function<void(void*)>> Pointer;
+
+  // How many objects to allocate at once.
+  static constexpr uint64_t kBatchSize = 32ul;
+
+  ~UnsafeFreeList() {
+    for (T* mem : to_free_) {
+      std::free(mem);
+    }
+  }
+
+  void Release(void* raw_ptr) {
+    static_cast<T*>(raw_ptr)->~T();
+    objects_.emplace_back(static_cast<T*>(raw_ptr));
+  }
+
+  template <typename... Args>
+  Pointer New(Args&&... args) {
+    T* raw_ptr;
+    if (objects_.empty()) {
+      T* mem = static_cast<T*>(std::malloc(kBatchSize * sizeof(T)));
+      to_free_.emplace_back(mem);
+
+      for (size_t i = 0; i < kBatchSize - 1; ++i) {
+        objects_.emplace_back(&(mem[i]));
+      }
+
+      raw_ptr = &(mem[kBatchSize - 1]);
+    } else {
+      raw_ptr = objects_.back();
+      objects_.pop_back();
+    }
+
+    new (raw_ptr) T(std::forward<Args>(args)...);
+    return Pointer(raw_ptr, [this](void* ptr) { Release(ptr); });
+  }
+
+  // Returns the number of objects that this free list holds.
+  size_t NumObjects() const { return objects_.size(); }
+
+  UnsafeFreeList() {}
+
+ private:
+  // Free objects that can be assigned when needed.
+  std::vector<T*> objects_;
+
+  // The free list only releases memory upon destruction.
+  std::vector<T*> to_free_;
+
+  friend UnsafeFreeList& GetUnsafeFreeList<T>();
+
+  DISALLOW_COPY_AND_ASSIGN(UnsafeFreeList);
+};
+
+// Returns a global singleton free list instance for a type.
+template <typename T>
+UnsafeFreeList<T>& GetUnsafeFreeList() {
+  static UnsafeFreeList<T>* free_list = new UnsafeFreeList<T>();
+  return *free_list;
+}
+
+// Allocates an object from the singleton free list for a type.
+template <typename T, typename... Args>
+typename UnsafeFreeList<T>::Pointer AllocateFromUnsafeFreeList(Args&&... args) {
+  return GetUnsafeFreeList<T>().New(std::forward<Args>(args)...);
 }
 
 }  // namespace nc

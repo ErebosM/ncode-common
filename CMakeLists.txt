@@ -45,8 +45,8 @@ endif()
 ################################
 # Common stuff
 ################################
-set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h)
-add_library(ncode_common STATIC src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc ${NCODE_COMMON_HEADER_FILES})
+set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h)
+add_library(ncode_common STATIC src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc ${NCODE_COMMON_HEADER_FILES})
 
 set_property(SOURCE src/stringpiece_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-conversion-null -Wno-sign-compare")
 set_property(SOURCE src/strutil_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-sign-compare")
@@ -65,6 +65,7 @@ if (NOT NCODE_DISABLE_TESTS)
    add_test_exec(thread_runner_test src/thread_runner_test.cc ncode_common)
    add_test_exec(perfect_hash_test src/perfect_hash_test.cc ncode_common)
    add_test_exec(alphanum_test src/alphanum_test.cc ncode_common)
+   add_test_exec(stats_test src/stats_test.cc ncode_common)
 endif()
 
 if (NOT NCODE_DISABLE_BENCHMARKS)
