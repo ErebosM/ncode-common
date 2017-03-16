@@ -37,14 +37,22 @@ class PtrQueue {
   // Will produce. If the queue is already closed or if the produce action
   // blocks and the queue is closed this method is a no-op and the item will be
   // lost (freed) in this case false is returned.
-  bool ProduceOrBlock(std::unique_ptr<T, Deleter> item) {
+  bool ProduceOrBlockWithTimeout(std::unique_ptr<T, Deleter> item,
+                                 std::chrono::milliseconds timeout,
+                                 bool* timed_out) {
+    *timed_out = false;
     std::unique_lock<std::mutex> lock(mu_);
     if (closed_) {
       return false;
     }
 
     if (num_items_ == Size) {
-      condition_.wait(lock, [this] { return closed_ || num_items_ < Size; });
+      bool p = condition_.wait_for(
+          lock, timeout, [this] { return closed_ || num_items_ < Size; });
+      if (!p) {
+        *timed_out = true;
+        return false;
+      }
 
       if (closed_) {
         return false;
@@ -59,10 +67,19 @@ class PtrQueue {
     return true;
   }
 
+  // Same as above, no timeout.
+  bool ProduceOrBlock(std::unique_ptr<T, Deleter> item) {
+    bool dummy;
+    return ProduceOrBlockWithTimeout(std::move(item),
+                                     std::chrono::milliseconds::max(), &dummy);
+  }
+
   // Will consume. If the queue is closed and empty it will return an empty
-  // unique_ptr.
-  std::unique_ptr<T, Deleter> ConsumeOrBlock() {
+  // unique_ptr. Can also specify timeout.
+  std::unique_ptr<T, Deleter> ConsumeOrBlockWithTimeout(
+      std::chrono::milliseconds timeout, bool* timed_out) {
     std::unique_ptr<T, Deleter> return_ptr;
+    *timed_out = false;
 
     {
       std::unique_lock<std::mutex> lock(mu_);
@@ -72,7 +89,13 @@ class PtrQueue {
             return std::move(return_ptr);
           }
 
-          condition_.wait(lock, [this] { return closed_ || num_items_ > 0; });
+          bool p = condition_.wait_for(
+              lock, timeout, [this] { return closed_ || num_items_ > 0; });
+          if (!p) {
+            *timed_out = true;
+            return std::move(return_ptr);
+          }
+
           if (closed_ && num_items_ == 0) {
             return std::move(return_ptr);
           }
@@ -90,7 +113,13 @@ class PtrQueue {
     }
 
     // If all items were invalid we should try again.
-    return ConsumeOrBlock();
+    return ConsumeOrBlockWithTimeout(timeout, timed_out);
+  }
+
+  // Same as above, but no timeout.
+  std::unique_ptr<T, Deleter> ConsumeOrBlock() {
+    bool dummy;
+    return ConsumeOrBlockWithTimeout(std::chrono::milliseconds::max(), &dummy);
   }
 
   // Invalidates all items for which the callback evaluates to true

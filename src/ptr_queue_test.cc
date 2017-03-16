@@ -95,6 +95,28 @@ TEST(SmallQueue, ProduceInvalidateConsume) {
   ASSERT_EQ(0ul, small_queue.size());
 }
 
+TEST(SmallQueue, EmptyTimeout) {
+  PtrQueue<int, 2> small_queue;
+
+  bool timed_out;
+  auto result = small_queue.ConsumeOrBlockWithTimeout(
+      std::chrono::milliseconds(500), &timed_out);
+  ASSERT_FALSE(result);
+  ASSERT_TRUE(timed_out);
+}
+
+TEST(SmallQueue, FullTimeout) {
+  PtrQueue<int, 2> small_queue;
+
+  ASSERT_TRUE(small_queue.ProduceOrBlock(make_unique<int>(1)));
+  ASSERT_TRUE(small_queue.ProduceOrBlock(make_unique<int>(2)));
+
+  bool timed_out;
+  ASSERT_FALSE(small_queue.ProduceOrBlockWithTimeout(
+      make_unique<int>(3), std::chrono::milliseconds(500), &timed_out));
+  ASSERT_TRUE(timed_out);
+}
+
 TEST(SmallQueue, ProduceKill) {
   PtrQueue<int, 2> small_queue;
 
