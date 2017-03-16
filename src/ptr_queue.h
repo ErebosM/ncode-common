@@ -70,8 +70,9 @@ class PtrQueue {
   // Same as above, no timeout.
   bool ProduceOrBlock(std::unique_ptr<T, Deleter> item) {
     bool dummy;
-    return ProduceOrBlockWithTimeout(std::move(item),
-                                     std::chrono::milliseconds::max(), &dummy);
+    return ProduceOrBlockWithTimeout(
+        std::move(item), std::chrono::hours(std::numeric_limits<int>::max()),
+        &dummy);
   }
 
   // Will consume. If the queue is closed and empty it will return an empty
@@ -119,7 +120,8 @@ class PtrQueue {
   // Same as above, but no timeout.
   std::unique_ptr<T, Deleter> ConsumeOrBlock() {
     bool dummy;
-    return ConsumeOrBlockWithTimeout(std::chrono::milliseconds::max(), &dummy);
+    return ConsumeOrBlockWithTimeout(
+        std::chrono::hours(std::numeric_limits<int>::max()), &dummy);
   }
 
   // Invalidates all items for which the callback evaluates to true
@@ -140,6 +142,21 @@ class PtrQueue {
     std::unique_lock<std::mutex> lock(mu_);
     closed_ = true;
     condition_.notify_all();
+  }
+
+  // Drains the queue, after this call returns the queue will be empty.
+  std::vector<std::unique_ptr<T, Deleter>> Drain() {
+    std::unique_lock<std::mutex> lock(mu_);
+    std::vector<std::unique_ptr<T, Deleter>> out(num_items_);
+
+    size_t i = -1;
+    while (num_items_ != 0) {
+      out[++i] = std::move(queue_[consumer_]);
+      consumer_ = (consumer_ + 1) & kMask;
+      num_items_--;
+    }
+
+    return out;
   }
 
  private:
