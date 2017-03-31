@@ -298,6 +298,8 @@ class PerfectHashMap {
         [](const std::pair<bool, Value>& pair) { return pair.first; });
   };
 
+  bool Empty() const { return Count() == 0; }
+
   Iterator begin() { return {this, Index<Tag, V>(GetFirst())}; }
   Iterator end() { return {this, Index<Tag, V>(values_.size())}; }
 

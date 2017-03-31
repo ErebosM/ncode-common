@@ -42,12 +42,14 @@ TEST(PerfectHash, Set) {
 
   Set set;
   ASSERT_EQ(0ul, set.Count());
+  ASSERT_TRUE(set.Empty());
   ASSERT_FALSE(set.Contains(index));
   ASSERT_FALSE(set.Contains(other_index));
   set.Insert(index);
   ASSERT_TRUE(set.Contains(index));
   ASSERT_FALSE(set.Contains(other_index));
   ASSERT_EQ(1ul, set.Count());
+  ASSERT_FALSE(set.Empty());
 }
 
 TEST(PerfectHash, Map) {
@@ -55,10 +57,12 @@ TEST(PerfectHash, Map) {
   auto index = store.AddItem("SomeItem");
 
   Map map;
+  ASSERT_TRUE(map.Empty());
   map[index] = "HI";
 
   ASSERT_EQ("HI", map[index]);
   ASSERT_EQ("HI", map.GetValueOrDie(index));
+  ASSERT_FALSE(map.Empty());
 
   auto other_index = store.AddItem("OtherItem");
   ASSERT_DEATH(map.GetValueOrDie(other_index), ".*");
