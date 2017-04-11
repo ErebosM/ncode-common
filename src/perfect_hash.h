@@ -347,6 +347,8 @@ class PerfectHashMap {
 
   void Resize(size_t size) { values_.resize(size); }
 
+  void Clear() { values_.clear(); }
+
   const Value& operator[](Index<Tag, V> index) const {
     return GetValueOrDie(index);
   }
