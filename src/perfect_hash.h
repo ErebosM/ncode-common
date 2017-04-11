@@ -169,6 +169,55 @@ class PerfectHashSet {
     return false;
   }
 
+  // Returns true if this set shares any elements in common with another one.
+  bool Intersects(const PerfectHashSet<V, Tag>& other) const {
+    const std::vector<char>& other_set = other.set_;
+    size_t to = std::min(other_set.size(), set_.size());
+    for (size_t i = 0; i < to; ++i) {
+      if (set_[i] && other_set[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Given this set and another will return a set with the elements from
+  // 'other' that are not in this set.
+  PerfectHashSet<V, Tag> Difference(const PerfectHashSet<V, Tag>& other) const {
+    const std::vector<char>& other_set = other.set_;
+    PerfectHashSet<V, Tag> out;
+
+    size_t i;
+    for (i = 0; i < other_set.size(); ++i) {
+      if (other_set[i]) {
+        if (i >= set_.size() || !set_[i]) {
+          out.Insert(Index<Tag, V>(i));
+        }
+      }
+    }
+
+    return out;
+  }
+
+  // Same as calling Difference and checking if the returned set is empty.
+  // Returns false if there is at least one element in 'other' that is not in
+  // this set.
+  bool DifferenceEmpty(const PerfectHashSet<V, Tag>& other) const {
+    const std::vector<char>& other_set = other.set_;
+
+    size_t i;
+    for (i = 0; i < other_set.size(); ++i) {
+      if (other_set[i]) {
+        if (i >= set_.size() || !set_[i]) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   size_t Count() const { return std::count(set_.begin(), set_.end(), true); }
 
   ConstIterator begin() const {
@@ -183,6 +232,16 @@ class PerfectHashSet {
   }
 
   ConstIterator end() const { return {this, Index<Tag, V>(set_.size())}; }
+
+  friend bool operator<(const PerfectHashSet<V, Tag>& a,
+                        const PerfectHashSet<V, Tag>& b) {
+    return a.set_ < b.set_;
+  }
+
+  friend bool operator==(const PerfectHashSet<V, Tag>& a,
+                         const PerfectHashSet<V, Tag>& b) {
+    return a.set_ == b.set_;
+  }
 
  private:
   std::vector<char> set_;
@@ -305,6 +364,16 @@ class PerfectHashMap {
 
   ConstIterator begin() const { return {this, Index<Tag, V>(GetFirst())}; }
   ConstIterator end() const { return {this, Index<Tag, V>(values_.size())}; }
+
+  friend bool operator<(const PerfectHashMap<V, Tag, Value>& a,
+                        const PerfectHashMap<V, Tag, Value>& b) {
+    return a.values_ < b.values_;
+  }
+
+  friend bool operator==(const PerfectHashMap<V, Tag, Value>& a,
+                         const PerfectHashMap<V, Tag, Value>& b) {
+    return a.values_ == b.values_;
+  }
 
  private:
   Index<Tag, V> GetFirst() const {

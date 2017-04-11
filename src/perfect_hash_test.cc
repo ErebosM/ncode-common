@@ -52,6 +52,33 @@ TEST(PerfectHash, Set) {
   ASSERT_FALSE(set.Empty());
 }
 
+TEST(PerfectHash, SetIntersect) {
+  Store store;
+
+  std::string item = "SomeItem";
+  auto index = store.AddItem(item);
+
+  std::string other_item = "OtherItem";
+  auto other_index = store.AddItem(other_item);
+
+  Set set_one;
+  Set set_two;
+  ASSERT_FALSE(set_one.Intersects(set_two));
+  ASSERT_FALSE(set_two.Intersects(set_one));
+
+  set_one.Insert(index);
+  ASSERT_FALSE(set_one.Intersects(set_two));
+  ASSERT_FALSE(set_two.Intersects(set_one));
+
+  set_two.Insert(other_index);
+  ASSERT_FALSE(set_one.Intersects(set_two));
+  ASSERT_FALSE(set_two.Intersects(set_one));
+
+  set_one.Insert(other_index);
+  ASSERT_TRUE(set_one.Intersects(set_two));
+  ASSERT_TRUE(set_two.Intersects(set_one));
+}
+
 TEST(PerfectHash, Map) {
   Store store;
   auto index = store.AddItem("SomeItem");
