@@ -109,6 +109,12 @@ class PerfectHashSet {
     }
   }
 
+  PerfectHashSet(const std::vector<Index<Tag, V>>& init_v) {
+    for (Index<Tag, V> i : init_v) {
+      Insert(i);
+    }
+  }
+
   explicit PerfectHashSet(const std::set<Index<Tag, V>>& init_set) {
     for (Index<Tag, V> i : init_set) {
       Insert(i);

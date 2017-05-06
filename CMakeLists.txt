@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 2.8.7)
 
+if(TARGET ncode_common)
+    return()
+endif(TARGET ncode_common)
+
 project(NCodeCommon)
 option(NCODE_DISABLE_TESTS "If tests should be compiled or not" ON)
 option(NCODE_DISABLE_BENCHMARKS "If benchmarks should be compiled or not" ON)
