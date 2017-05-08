@@ -86,10 +86,10 @@ TEST(SmallQueue, DrainQueue) {
   small_queue.ProduceOrBlock(make_unique<int>(2));
 
   std::vector<std::unique_ptr<int>> contents = small_queue.Drain();
-  ASSERT_EQ(2, contents.size());
+  ASSERT_EQ(2ul, contents.size());
   ASSERT_EQ(1, *contents.front());
   ASSERT_EQ(2, *contents.back());
-  ASSERT_EQ(0, small_queue.size());
+  ASSERT_EQ(0ul, small_queue.size());
 }
 
 TEST(SmallQueue, ProduceInvalidateConsume) {

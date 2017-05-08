@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 2.8.7)
 
+# If there is already a target called ncode_common someone has already
+# added this project. Will ignore.
 if(TARGET ncode_common)
     return()
 endif(TARGET ncode_common)
@@ -22,19 +24,14 @@ if (NCODE_TSAN)
    set(NCODE_BASE_LD_FLAGS "${NCODE_BASE_LD_FLAGS} -fsanitize=thread")
 endif()
 
-if(APPLE)
-elseif(UNIX)
-  set(NOCDE_BASE_FLAGS "${NCODE_BASE_FLAGS} -pthread")
-endif()
-
 if (NCODE_DEBUG)
-  set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -O0 -fno-omit-frame-pointer --coverage")
+  set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -O0 -fno-omit-frame-pointer")
 else()
   set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -O3 -march=native -DNDEBUG")   
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${NCODE_BASE_FLAGS}")
-set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} ${NCODE_BASE_LD_FLAGS} --coverage")
+set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} ${NCODE_BASE_LD_FLAGS}")
 
 if (NOT NCODE_DISABLE_TESTS)
    include(CTest)
@@ -46,11 +43,8 @@ if (NOT NCODE_DISABLE_TESTS)
    endmacro(add_test_exec)
 endif()
 
-################################
-# Common stuff
-################################
 set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h)
-add_library(ncode_common SHARED src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc ${NCODE_COMMON_HEADER_FILES})
+add_library(ncode_common STATIC src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc ${NCODE_COMMON_HEADER_FILES})
 
 set_property(SOURCE src/stringpiece_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-conversion-null -Wno-sign-compare")
 set_property(SOURCE src/strutil_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-sign-compare")
@@ -79,10 +73,3 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode_common)
 endif()
-
-INSTALL(TARGETS ncode_common
-  DESTINATION "lib")
-
-INSTALL (
-  FILES ${NCODE_COMMON_HEADER_FILES}
-  DESTINATION include/ncode/ncode_common)
