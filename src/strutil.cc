@@ -1325,7 +1325,7 @@ char *DoubleToBuffer(double value, char *buffer) {
   } else if (value == -std::numeric_limits<double>::infinity()) {
     strcpy(buffer, "-inf");
     return buffer;
-  } else if (isnan(value)) {
+  } else if (std::isnan(value)) {
     strcpy(buffer, "nan");
     return buffer;
   }
@@ -1441,7 +1441,7 @@ char *FloatToBuffer(float value, char *buffer) {
   } else if (value == -std::numeric_limits<double>::infinity()) {
     strcpy(buffer, "-inf");
     return buffer;
-  } else if (isnan(static_cast<float>(value))) {
+  } else if (std::isnan(static_cast<float>(value))) {
     strcpy(buffer, "nan");
     return buffer;
   }
