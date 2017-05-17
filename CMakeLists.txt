@@ -73,3 +73,6 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode_common)
 endif()
+
+install (TARGETS ncode_common DESTINATION lib)
+install (FILES ${NCODE_COMMON_HEADER_FILE} DESTINATION include)
