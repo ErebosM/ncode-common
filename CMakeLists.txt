@@ -74,5 +74,3 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    target_link_libraries(free_list_benchmark ncode_common)
 endif()
 
-install (TARGETS ncode_common DESTINATION lib)
-install (FILES ${NCODE_COMMON_HEADER_FILES} DESTINATION include/ncode_common)
