@@ -1,0 +1,32 @@
+<script>
+	$(document).ready(function() {
+		function UpdateForms() {
+			{{#elements}}
+			rows = [];
+			table.rows('.selected').data().each(function(a) {
+				rows.push(+a[{{column_index}}]);
+			});
+			
+			document.getElementById('{{element_id}}').value = 
+				JSON.stringify(rows);
+			{{/elements}}
+		}
+		
+		var table = $('#{{table_id}}').DataTable({
+			dom: 'Bfrtip',
+	        buttons: [
+	            {
+	                text: 'Invert Selection',
+	                action: function () {
+						$(table.rows().nodes()).toggleClass('selected');
+	                    UpdateForms();
+	                }
+	            },
+	        ]
+		});
+		$('#{{table_id}} tbody').on('click', 'tr', function() {
+			$(this).toggleClass('selected');
+			UpdateForms();
+		});
+	});
+</script>

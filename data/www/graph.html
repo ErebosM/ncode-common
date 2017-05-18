@@ -1,0 +1,651 @@
+<script type='text/javascript'>//<![CDATA[
+window.onload=function(){
+"use strict";
+
+var graph = {{graph_json}}
+
+var paths = {{paths_json}}
+
+const LINK_WIDTH = 10;
+const NODE_RADIUS = 15;
+
+// Will annotate links  and paths with an index.
+for (var i = 0; i < graph.links.length; i++) {
+  graph.links[i].index = i;
+}
+
+for (var i = 0; i < paths.length; i++) {
+  paths[i].index = i;
+}
+
+function path_source(path) {
+  return path.nodes[0];
+}
+
+function path_target(path) {
+  return path.nodes[path.nodes.length - 1];
+}
+
+function node_to_text(node_index) {
+  return node_index + " (" + graph.nodes[node_index].name + ")";
+}
+
+function link_color_option() {
+	var select_box = document.getElementById("color_select");
+  return select_box.selectedIndex;
+}
+
+// Returns a point along a line.
+function point_along_line(p1, p2, fraction_along) {
+  var px = p1[0] + (p2[0] - p1[0]) * fraction_along;
+  var py = p1[1] + (p2[1] - p1[1]) * fraction_along;
+  return [px, py];
+}
+
+// Returns the coordinates of a point (p3) that is some offset away from a point (p4) 
+// on a line. The line is defined by p1 -> p2 and p4 will be fraction_along away 
+// from the start of the line. fraction_along should be between 0 and 1, offset can 
+// be any positive or negative number. 
+function point_offset_along_line(p1, p2, fraction_along, offset) {
+  var mp = point_along_line(p1, p2, fraction_along);
+  var nx = p2[1] - p1[1];
+  var ny = p1[0] - p2[0];
+
+  var norm_len = Math.sqrt(nx * nx + ny * ny);
+  nx /= norm_len;
+  ny /= norm_len;
+
+  var px = mp[0] + offset * nx;
+  var py = mp[1] + offset * ny;
+
+  return [px, py];
+}
+
+// Changes the x and y coordinates of a line's start and end point.
+function update_line(start_point, end_point, line) {
+  line.setAttribute("x1", x(start_point[0]));
+  line.setAttribute("y1", y(start_point[1]));
+  line.setAttribute("x2", x(end_point[0]));
+  line.setAttribute("y2", y(end_point[1]));
+}
+
+// Returns a string suitable to be passed as a stroke format.
+function get_stroke(load) {
+  var red = Math.floor(link_color_scale(load));
+  var blue = 255 - red;
+  var green = 0;
+  return "stroke: rgb(" + red + "," + green + "," + blue + ");";
+}
+
+// Updates the colors of the links. Called initially and every time the option changes.
+function update_link_colors() {
+	var color_option = link_color_option();
+	d3.selectAll(".link").attr("style", function(d) {
+		var load = d.forward ? d.link.forward_load[color_option] : d.link.reverse_load[color_option];
+      	return get_stroke(load) + "stroke-width: " + LINK_WIDTH + ";";
+    });
+}
+
+// Returns a DOM group element for a new link representation. The element will 
+// have an 'update_endpoints' method that can be used to update it when the 
+// positions of the endpoints change.
+function get_link_representation(link_data) {
+  var xmlns = "http://www.w3.org/2000/svg";
+  var g = document.createElementNS(xmlns, "g");
+
+  var forward_link;
+  var reverse_link;
+
+  var load_data = [{
+    "link": link_data,
+    "forward": true
+  }, {
+    "link": link_data,
+    "forward": false
+  }];
+  var link_dom_objects = [];
+
+  d3.select(g).selectAll(".link")
+    .data(load_data)
+    .enter()
+    .append("line")
+    .classed("link", true)
+    .on('mouseover', function(d) {
+      var tooltip_text = d.forward ? d.link.forward_tooltip : d.link.reverse_tooltip;
+      var source_text = node_to_text(d.link.source.index);
+      var target_text = node_to_text(d.link.target.index);
+      var link_desc = d.forward ? (source_text + " ---> " + target_text) : (target_text + " ---> " + source_text)
+      var text = link_desc + "<br/>" + tooltip_text;
+      show_tooltip(text);
+    }).on('mouseout', function(d) {
+      hide_tooltip();
+    })
+    .each(function(d) {
+      link_dom_objects.push(this);
+    });
+
+  var forward_link = link_dom_objects[0];
+  var reverse_link = link_dom_objects[1];
+
+  d3.select(g).selectAll(".link_marker")
+    .data([0, 1, 2, 3])
+    .enter()
+    .append("line")
+    .classed("link_marker", true)
+    .attr('marker-end', 'url(#white_triangle)')
+    .each(function(d) {
+      link_dom_objects.push(this);
+    });
+
+  var forward_link_m1 = link_dom_objects[2];
+  var forward_link_m2 = link_dom_objects[3];
+  var reverse_link_m1 = link_dom_objects[4];
+  var reverse_link_m2 = link_dom_objects[5];
+
+  g.update_endpoints = function(p1, p2) {
+    var offset = LINK_WIDTH / 2 / scale_factor;
+    var start_forward = point_offset_along_line(p1, p2, 0, offset);
+    var end_forward = point_offset_along_line(p1, p2, 1, offset);
+    var start_reverse = point_offset_along_line(p1, p2, 0, -offset);
+    var end_reverse = point_offset_along_line(p1, p2, 1, -offset);
+
+    update_line(start_forward, end_forward, forward_link);
+    update_line(start_reverse, end_reverse, reverse_link);
+
+    var forward_link_m1_start = point_along_line(start_forward, end_forward, 0.1);
+    var forward_link_m1_end = point_along_line(start_forward, end_forward, 0.2);
+    var forward_link_m2_start = point_along_line(start_forward, end_forward, 0.8);
+    var forward_link_m2_end = point_along_line(start_forward, end_forward, 0.9);
+
+    var reverse_link_m1_start = point_along_line(end_reverse, start_reverse, 0.1);
+    var reverse_link_m1_end = point_along_line(end_reverse, start_reverse, 0.2);
+    var reverse_link_m2_start = point_along_line(end_reverse, start_reverse, 0.8);
+    var reverse_link_m2_end = point_along_line(end_reverse, start_reverse, 0.9);
+
+    update_line(forward_link_m1_start, forward_link_m1_end, forward_link_m1);
+    update_line(forward_link_m2_start, forward_link_m2_end, forward_link_m2);
+    update_line(reverse_link_m1_start, reverse_link_m1_end, reverse_link_m1);
+    update_line(reverse_link_m2_start, reverse_link_m2_end, reverse_link_m2);
+  }
+  return g;
+}
+
+// Finds the link between source and target. Will return and array 
+// of 2 elements -- the first will be the link and the second will 
+// be set to false if the source/target had to be inverted.
+function find_link(source, target) {
+  for (var i = 0; i < graph.links.length; i++) {
+    var link = graph.links[i];
+    if (link.source.index == source && link.target.index == target) {
+      return [link, true];
+    }
+
+    if (link.source.index == target && link.target.index == source) {
+      return [link, false];
+    }
+  }
+
+  console.log("Unable to find link " + source + "->" + target);
+  return null;
+}
+
+// Returns all paths that go over a link.
+function paths_for_link(link) {
+  var return_paths = [];
+  for (var i = 0; i < paths.length; i++) {
+    var path = paths[i];
+    for (var j = 0; j < path.nodes.length - 1; j++) {
+      var source = path.nodes[j];
+      var target = path.nodes[j + 1];
+      if ((link.source.index == source && link.target.index == target) ||
+        (link.target.index == source && link.source.index == target)) {
+        return_paths.push(path);
+      }
+    }
+  }
+
+  return return_paths;
+}
+
+// Updates the right-hand side legend that shows paths and colors.
+function update_legend() {
+  var legend_div = d3.select(".canvas").select(".legend");
+  var displayed_paths = paths.filter(function(d) {
+    return d.displayed;
+  });
+  var path_spans = legend_div.selectAll(".path_span")
+    .data(displayed_paths, function(d) {
+      return d.index;
+    });
+
+  var wrapper = path_spans.enter().append("div").attr("class", "path_span");
+  wrapper.append("span")
+    .attr("style", function(d) {
+      var color = color_scale(d.index);
+      return "background-color: " + color + ";";
+    });
+
+  wrapper.append("text").html(function(d) {
+    return d.nodes + " (" + d.legend_label + ")";
+  });
+
+  path_spans.exit().remove();
+  if (displayed_paths.length == 0) {
+    legend_div.attr("style", "opacity: 0.0;")
+  } else {
+    legend_div.attr("style", "opacity: 1.0;")
+  }
+}
+
+function update_popup(source) {
+  d3.event.preventDefault();
+  d3.event.stopPropagation();
+  if (context_menu_showing) {
+    d3.select(".popup").remove();
+    context_menu_showing = false;
+  } else {
+    context_menu_showing = true;
+
+    // Build the popup            
+    var popup = d3.select(".canvas")
+      .append("div")
+      .attr("class", "popup");
+
+    popup.append("p").text("Paths from " + node_to_text(source));
+
+    var paths_from_source = paths.filter(function(d) {
+      return path_source(d) == source;
+    });
+
+    var target_to_paths = {}
+    for (var i = 0; i < paths_from_source.length; i++) {
+      var path = paths_from_source[i];
+      var target = path_target(path);
+      console.log(target);
+      var path_list = target_to_paths[target];
+      if (path_list == null) {
+        target_to_paths[target] = [path];
+      } else {
+        path_list.push(path);
+      }
+    }
+
+    var target_to_paths_array = []
+    for (var property in target_to_paths) {
+      if (target_to_paths.hasOwnProperty(property)) {
+        // Will assume that all paths for the same 
+        // destination have the same displayed property.
+        var path_list = target_to_paths[property];
+        var displayed = path_list[0].displayed;
+
+        target_to_paths_array.push({
+          "target": property,
+          "paths": path_list,
+          "displayed": displayed
+        });
+      }
+    }
+
+    var labels = popup.selectAll(".path_input")
+      .data(target_to_paths_array).enter()
+      .append('label')
+      .attr('for', function(d, i) {
+        return 'a' + i;
+      })
+      .html(function(d) {
+        return d.paths.length + " paths to " + node_to_text(d.target);
+      });
+
+    var inputs = labels
+      .append("input")
+      .attr("type", "checkbox")
+      .attr("id", function(d, i) {
+        return 'a' + i;
+      }).property("checked", function(d) {
+        return d.displayed;
+      }).on("click", function(d) {
+        d.displayed = !d.displayed;
+        for (i = 0; i < d.paths.length; ++i) {
+          d.paths[i].displayed = d.displayed;
+        }
+
+        update_legend();
+        update_path_edges();
+        update_positions();
+      });
+
+    labels.append("br");
+  }
+}
+
+var scale_factor = 1;
+var translation = [0, 0];
+var context_menu_showing = false;
+
+// Path colors are picked from here.
+var color_scale = d3.scale.category10();
+
+// A scale from [0-1] -> [0-255] for link color.
+var link_color_scale = d3.scale.linear();
+link_color_scale.range([0, 255]);
+
+function x(old_x) {
+  return translation[0] + old_x * scale_factor;
+}
+
+function y(old_y) {
+  return translation[1] + old_y * scale_factor;
+}
+
+function reverse_x(old_x) {
+  return (old_x - translation[0]) / scale_factor;
+}
+
+function reverse_y(old_y) {
+  return (old_y - translation[1]) / scale_factor;
+}
+
+d3.select("#color_select").on("change", function() { update_link_colors(); });
+
+var zoom = d3.behavior.zoom()
+  .scaleExtent([1, 32]).on("zoom", zoomed);
+
+var force = d3.layout.force()
+  .charge(-200)
+  .linkDistance(function(d) {
+    return d.distance_hint > 1 ? d.distance_hint : 2 * NODE_RADIUS;
+  })
+  .size([window.innerWidth, window.innerHeight]);
+
+var drag = d3.behavior.drag({
+    buttons: [0]
+  })
+  .origin(function(d) {
+    return d;
+  }) //center of circle
+  .on("dragstart", dragstarted)
+  .on("drag", dragged)
+  .on("dragend", dragended);
+
+var svg = d3.select("svg")
+  .attr("width", "100%")
+  .attr("height", "100%").append("g").call(zoom);
+
+var defs = svg.append('svg:defs');
+
+var marker = defs
+  .append('svg:marker')
+  .attr('id', 'white_triangle')
+  .attr('markerHeight', 8)
+  .attr('markerWidth', 6)
+  .attr('orient', 'auto')
+  .attr('refX', 1)
+  .attr('refY', 5)
+  .attr('viewBox', '0 0 10 10')
+  .append('svg:path')
+  .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+  .attr('fill', "#fff");
+
+var rect = svg.append("rect")
+  .attr("width", "100%")
+  .attr("height", "100%").style("fill", "none").style("pointer-events", "all");
+
+var vis = svg.append("svg:g")
+  .attr("class", "plotting-area");
+
+// Define the div for the tooltip
+var div_tooltip = d3.select("body").append("div")
+  .attr("class", "tooltip")
+  .style("opacity", 0);
+
+function show_tooltip(text) {
+  div_tooltip.transition()
+    .duration(200)
+    .style("opacity", .9);
+  div_tooltip.html(text)
+    .style("left", (d3.event.pageX + 25) + "px")
+    .style("top", (d3.event.pageY) + "px");
+}
+
+function hide_tooltip() {
+  div_tooltip.transition()
+    .duration(500)
+    .style("opacity", 0);
+}
+
+force
+  .nodes(graph.nodes)
+  .links(graph.links)
+  .start();
+
+var link_elements = vis.selectAll(".link")
+  .data(graph.links)
+  .enter()
+  .append(function(d) {
+    return get_link_representation(d);
+  })
+update_link_colors();
+
+var path_edges_vis = vis.append("g");
+
+var gnodes = vis.selectAll('g.gnode')
+  .data(graph.nodes)
+  .enter()
+  .append('g')
+  .on("contextmenu", function(d) {
+    d3.event.stopPropagation();
+    update_popup(d.index);
+  })
+  .on('mouseover', function(d) {
+    var text = d.name;
+    show_tooltip(text);
+  }).on('mouseout', function(d) {
+    hide_tooltip();
+  })
+  .call(drag);
+
+var node_elements = gnodes.append("circle")
+  .attr("class", "node")
+  .attr("r", NODE_RADIUS);
+
+var node_labels = gnodes.append("text")
+  .text(function(d) {
+    return d.index;
+  }).attr("text-anchor", "middle").attr("dominant-baseline", "central");
+
+function update_path_edges() {
+  // The data is combinations of (link_index, path_index) 
+  // for paths that are displayed.
+  var data = [];
+
+  // Will also need a separate data array for the per-path labels. 
+  // This one will simply contain the ids of displayed paths.
+  var displayed_paths_data = [];
+
+  for (var i = 0; i < paths.length; i++) {
+    var path = paths[i];
+    if (!path.displayed) {
+      continue;
+    }
+
+    displayed_paths_data.push(i);
+    for (var j = 0; j < path.nodes.length - 1; j++) {
+      var source = path.nodes[j];
+      var target = path.nodes[j + 1];
+
+      var result = find_link(source, target);
+      var link = result[0];
+      var forward_direction = result[1];
+
+      data.push({
+        "link_index": link.index,
+        "path_index": i,
+        "forward_direction": forward_direction,
+        "first_in_path": j == 0,
+      });
+    }
+  }
+
+  var edges = path_edges_vis.selectAll(".path_edge_group")
+    .data(data, function(d) {
+      return d.link_index + "" + d.path_index;
+    });
+  var edge_groups = edges.enter().append("g")
+    .attr("class", "path_edge_group")
+    .attr("style", function(d) {
+      var color = color_scale(d.path_index);
+      return "stroke: " + color + ";fill: " + color + ";";
+    });
+  edge_groups.append("path").attr("id", "path_edge");
+  edge_groups.append("path")
+    .attr("id", "path_edge_marker").attr("d", "M 0 -5 L 10 0 L 0 5 z");
+  edges.exit().remove();
+
+  var path_labels = path_edges_vis.selectAll(".path_label")
+    .data(displayed_paths_data, function(d) {
+      return d;
+    });
+  path_labels.enter().append("text")
+    .text(function(d) {
+      var path = paths[d];
+      return path.label;
+    })
+    .attr("style", function(d) {
+      var color = color_scale(d);
+      return "stroke: " + color + ";fill: " + color + ";";
+    })
+    .attr("class", "path_label");
+  path_labels.exit().remove();
+}
+
+function update_positions() {
+  link_elements.each(function(d) {
+    var x1 = d.source.x;
+    var x2 = d.target.x;
+    var y1 = d.source.y;
+    var y2 = d.target.y;
+    this.update_endpoints([x1, y1], [x2, y2]);
+  });
+
+  // Link id to number of paths that go over the link. Used when calculating offsets.
+  var link_to_count = {}
+    // The DOM path objects are stored here, where they can later be 
+    // accessed when adding arrow markers.
+  var svg_paths = []
+    // A mapping from the path index to the arc for the first edge in the path. Used when 
+    // adding the fraction labels.
+  var path_index_to_first_edge_arc = {}
+
+  path_edges_vis.selectAll("#path_edge").attr("d", function(d) {
+    var offset = link_to_count[d.link_index];
+    if (offset == null) {
+      offset = 0;
+    }
+    link_to_count[d.link_index] = offset + 1;
+
+    var link = graph.links[d.link_index];
+    offset = (1 + offset) * 10;
+
+    var sx = link.source.x;
+    var sy = link.source.y;
+    var tx = link.target.x;
+    var ty = link.target.y;
+    var p = point_offset_along_line([sx, sy], [tx, ty], 0.5, offset);
+    return "M" + x(sx) + "," + y(sy) +
+      " Q" + x(p[0]) + "," + y(p[1]) +
+      " " + x(tx) + "," + y(ty);
+  }).each(function(d) {
+    svg_paths.push(this);
+    if (d.first_in_path) {
+      path_index_to_first_edge_arc[d.path_index] = this;
+    }
+  });
+
+  path_edges_vis.selectAll("#path_edge_marker").attr("transform", function(d, i) {
+    var svg_path = svg_paths[i];
+    var len = svg_path.getTotalLength();
+    var p1 = svg_path.getPointAtLength(0.5 * len);
+    var p2 = svg_path.getPointAtLength(0.45 * len);
+    if (!d.forward_direction) {
+      var tmp = p1;
+      p1 = p2;
+      p2 = tmp;
+    }
+
+    var angle = Math.atan2(p1.y - p2.y, p1.x - p2.x) * 180 / Math.PI; //angle for tangent
+    return "translate(" + p1.x + "," + p1.y + ")rotate(" + angle + ")";
+  });
+
+  path_edges_vis.selectAll("text.path_label").attr("transform", function(d) {
+    var path_index = d;
+    var path = paths[path_index];
+    var svg_path = path_index_to_first_edge_arc[path_index];
+
+    // Will move the label close to the first arc along the path
+    var len = svg_path.getTotalLength();
+    var p = svg_path.getPointAtLength(0.5 * len);
+    return "translate(" + p.x + "," + p.y + ")";
+  });
+
+  gnodes.attr("transform", function(d) {
+    return 'translate(' + [x(d.x), y(d.y)] + ')';
+  });
+}
+
+var dragged = false;
+function dragstarted(d) {
+  if (d3.event.sourceEvent.which == 1) {
+    dragged = true;
+    d3.event.sourceEvent.stopPropagation();
+    d3.select(this).classed("dragging", true);
+    force.stop();
+  }
+}
+
+function dragged(d) {
+  if (dragged) {
+    if (d.fixed) return; //root is fixed
+
+    //get mouse coordinates relative to the visualization
+    //coordinate system:
+    var mouse = d3.mouse(vis.node());
+    d.x = reverse_x(mouse[0]);
+    d.y = reverse_y(mouse[1]);
+    update_positions();
+  }
+}
+
+function dragended(d) {
+  if (dragged) {
+    dragged = false
+    d3.event.sourceEvent.stopPropagation();
+    d3.select(this).classed("dragging", false);
+    force.resume();
+  }
+}
+
+function zoomed() {
+  scale_factor = d3.event.scale;
+  translation = d3.event.translate;
+  update_positions();
+}
+
+force.on("tick", update_positions);
+
+}//]]> 
+
+</script>
+<svg style="width: 100%; height: 100%; position: absolute;">
+</svg>
+<div class="canvas">
+	<div class="legend"></div>
+	<div class="options">
+		<div>
+			Link color: <select id="color_select">
+				{{#display_mode_section}}
+				<option>{{display_mode}}</option>
+				{{/display_mode_section}}
+			</select>
+		</div>
+	</div>
+</div>
