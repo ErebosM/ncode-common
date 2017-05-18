@@ -142,3 +142,4 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode)
 endif()
+
