@@ -72,6 +72,42 @@ endfunction()
 create_resources("${PROJECT_SOURCE_DIR}/data/www" "${PROJECT_BINARY_DIR}/www_resources.c" "www")
 create_resources("${PROJECT_SOURCE_DIR}/data/grapher_templates" "${PROJECT_BINARY_DIR}/grapher_resources.c" "grapher")
 
+# Need a linear optimizer. Will look for both GLPK and CPLEX.
+find_package(GLPK)
+find_package(CPLEX)
+
+# Check which optimization package is found
+set(FORCE_GLPK false CACHE BOOL "If GLPK and CPLEX are found, by default we build against CPLEX. Setting this to true forces to build against GLPK")
+if(CPLEX_FOUND)
+    if(GLPK_FOUND AND FORCE_GLPK)
+        set(OPTIMIZER_INCLUDE_DIRS ${GLPK_INCLUDE_DIR})
+        set(OPTIMIZER_LIBRARIES ${GLPK_LIBRARY})
+	set(OPTIMIZER "GLPK")
+    else()
+        set(OPTIMIZER_INCLUDE_DIRS ${CPLEX_INCLUDE_DIRS})
+	if(APPLE)
+	    set(OPTIMIZER_LIBRARIES -Wl,-force_load ${CPLEX_LIBRARIES})
+	elseif(UNIX)
+	    set(OPTIMIZER_LIBRARIES -Wl,-whole-archive ${CPLEX_LIBRARIES} -Wl,-no-whole-archive)
+	endif()
+	   set(OPTIMIZER "CPLEX")
+    endif()
+else()
+    if(GLPK_FOUND)
+        set(OPTIMIZER_INCLUDE_DIRS ${GLPK_INCLUDE_DIR})
+        set(OPTIMIZER_LIBRARIES ${GLPK_LIBRARY})
+	      set(OPTIMIZER "GLPK")
+    else()
+        set(OPTIMIZER "NONE")
+        message(STATUS "No LP optimizer found at all!")
+    endif()
+endif()
+
+configure_file(
+  "${PROJECT_SOURCE_DIR}/src/lp/config.h.in"
+  "${PROJECT_BINARY_DIR}/lp_config.h")
+include_directories(${OPTIMIZER_INCLUDE_DIRS} ${CMAKE_BINARY_DIR})
+
 # Common functionality
 set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h)
 add_library(ncode_common OBJECT src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc ${NCODE_COMMON_HEADER_FILES})
@@ -102,8 +138,12 @@ set_target_properties(ctemplate PROPERTIES COMPILE_FLAGS
 set(WEB_HEADER_FILES src/viz/web_page.h src/viz/graph.h src/viz/grapher.h src/viz/server.h)
 add_library(ncode_viz OBJECT src/viz/web_page.cc src/viz/graph.cc src/viz/grapher.cc src/viz/server.cc ${PROJECT_BINARY_DIR}/www_resources.c ${PROJECT_BINARY_DIR}/grapher_resources.c ${WEB_HEADER_FILES})
 
-add_library(ncode STATIC $<TARGET_OBJECTS:ncode_common> $<TARGET_OBJECTS:ncode_net> $<TARGET_OBJECTS:ctemplate> $<TARGET_OBJECTS:ncode_viz>)
-target_link_libraries(ncode ${PCAP_LIBRARY})
+# LP optimization
+set(LP_HEADER_FILES src/lp/lp.h src/lp/mc_flow.h src/lp/demand_matrix.h)
+add_library(ncode_lp OBJECT src/lp/lp.cc src/lp/mc_flow.cc src/lp/demand_matrix.cc)
+
+add_library(ncode STATIC $<TARGET_OBJECTS:ncode_common> $<TARGET_OBJECTS:ncode_net> $<TARGET_OBJECTS:ctemplate> $<TARGET_OBJECTS:ncode_viz> $<TARGET_OBJECTS:ncode_lp>)
+target_link_libraries(ncode ${PCAP_LIBRARY} ${OPTIMIZER_LIBRARIES})
 
 if (NOT NCODE_DISABLE_TESTS)
    set_property(SOURCE src/stringpiece_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-conversion-null -Wno-sign-compare")
@@ -133,6 +173,12 @@ if (NOT NCODE_DISABLE_TESTS)
    add_test_exec(graph_test src/viz/graph_test.cc ncode)
    add_test_exec(grapher_test src/viz/grapher_test.cc ncode)
    add_test_exec(server_test src/viz/server_test.cc ncode)
+
+   if (NOT ${OPTIMIZER} MATCHES "NONE")
+     add_test_exec(lp_test src/lp/lp_test.cc ncode)
+     add_test_exec(lp_mc_flow_test src/lp/mc_flow_test.cc ncode)
+     add_test_exec(lp_demand_matrix_test src/lp/demand_matrix_test.cc ncode)
+   endif()
 endif()
 
 if (NOT NCODE_DISABLE_BENCHMARKS)
@@ -142,4 +188,3 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode)
 endif()
-

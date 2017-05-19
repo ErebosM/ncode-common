@@ -465,7 +465,7 @@ class ClientConnection {
 
   // Writes a message
   bool WriteToSocket(std::unique_ptr<HeaderAndMessage<HeaderType>> msg) const {
-    if (msg->connection_id == -1) {
+    if (msg->connection_id == static_cast<uint64_t>(-1)) {
       msg->connection_id = tcp_socket_;
     }
     return BlockingWriteMessageToSocket(std::move(msg));

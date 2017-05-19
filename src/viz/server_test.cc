@@ -51,8 +51,8 @@ TEST_F(Fixture, SimpleMessage) {
   std::vector<std::unique_ptr<HeaderAndMessage<DummyHeader>>> contents =
       incoming_.Drain();
 
-  ASSERT_EQ(1, contents.size());
-  ASSERT_EQ(1000, contents[0]->message.size());
+  ASSERT_EQ(1ul, contents.size());
+  ASSERT_EQ(1000ul, contents[0]->message.size());
 }
 
 TEST_F(Fixture, LotsOfMessages) {
@@ -79,7 +79,7 @@ TEST_F(Fixture, LotsOfMessages) {
     for (size_t i = 0; i < msg_count; ++i) {
       std::unique_ptr<HeaderAndMessage<DummyHeader>> msg =
           incoming_.ConsumeOrBlock();
-      ASSERT_EQ(1000, msg->message.size());
+      ASSERT_EQ(1000ul, msg->message.size());
     }
   });
 
@@ -96,7 +96,7 @@ TEST_F(Fixture, LotsOfMessages) {
             << duration_cast<milliseconds>(later - now).count() << "ms";
 
   server_.Stop();
-  ASSERT_EQ(0, incoming_.size());
+  ASSERT_EQ(0ul, incoming_.size());
 }
 
 // TEST_F(Fixture, SimpleMessageWaitReply) {
@@ -139,9 +139,9 @@ TEST_F(Fixture, MultiSequentialConnections) {
   std::vector<std::unique_ptr<HeaderAndMessage<DummyHeader>>> contents =
       incoming_.Drain();
 
-  ASSERT_EQ(2, contents.size());
-  ASSERT_EQ(1000, contents[0]->message.size());
-  ASSERT_EQ(1000, contents[1]->message.size());
+  ASSERT_EQ(2ul, contents.size());
+  ASSERT_EQ(1000ul, contents[0]->message.size());
+  ASSERT_EQ(1000ul, contents[1]->message.size());
 }
 //
 // TEST_F(Fixture, MultiSimultaneousConnection) {
