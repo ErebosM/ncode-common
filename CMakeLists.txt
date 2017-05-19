@@ -106,7 +106,7 @@ endif()
 configure_file(
   "${PROJECT_SOURCE_DIR}/src/lp/config.h.in"
   "${PROJECT_BINARY_DIR}/lp_config.h")
-include_directories(${OPTIMIZER_INCLUDE_DIRS} ${CMAKE_BINARY_DIR})
+include_directories(${OPTIMIZER_INCLUDE_DIRS} ${PROJECT_BINARY_DIR})
 
 # Common functionality
 set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h)

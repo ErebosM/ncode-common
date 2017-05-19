@@ -19,7 +19,7 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
   using namespace net;
   using NodeAndElement = std::pair<GraphNodeIndex, const DemandMatrixElement*>;
 
-  GraphLinkSet all_links = graph_storage_->AllLinks();
+  GraphLinkSet all_links = graph_->AllLinks();
   GraphLinkMap<double> out;
 
   GraphNodeMap<std::vector<NodeAndElement>> src_to_destinations;
@@ -37,18 +37,18 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
       destinations_set.Insert(node_and_element.first);
     }
 
-    ShortestPath sp(src, destinations_set, {}, graph_storage_->AdjacencyList(),
-                    nullptr, nullptr);
+    ShortestPath sp(src, destinations_set, {}, graph_->AdjacencyList(), nullptr,
+                    nullptr);
     for (const NodeAndElement& node_and_element : destinations) {
       std::unique_ptr<Walk> shortest_path = sp.GetPath(node_and_element.first);
       for (GraphLinkIndex link : shortest_path->links()) {
-        out[link] += node_and_element.second->load.Mbps();
+        out[link] += node_and_element.second->demand.Mbps();
       }
     }
   }
 
   for (GraphLinkIndex link : all_links) {
-    double capacity = graph_storage_->GetLink(link)->bandwidth().Mbps();
+    double capacity = graph_->GetLink(link)->bandwidth().Mbps();
     double& link_utilization = out[link];
     link_utilization = link_utilization / capacity;
   }
@@ -59,7 +59,7 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
 net::Bandwidth DemandMatrix::TotalLoad() const {
   double load_mbps = 0;
   for (const DemandMatrixElement& element : elements_) {
-    load_mbps += element.load.Mbps();
+    load_mbps += element.demand.Mbps();
   }
 
   return net::Bandwidth::FromMBitsPerSecond(load_mbps);
@@ -68,7 +68,7 @@ net::Bandwidth DemandMatrix::TotalLoad() const {
 net::Bandwidth DemandMatrix::Load(const NodePair& node_pair) const {
   for (const DemandMatrixElement& element : elements_) {
     if (element.src == node_pair.first && element.dst == node_pair.second) {
-      return element.load;
+      return element.demand;
     }
   }
 
@@ -81,8 +81,8 @@ DemandMatrix::SPStats() const {
 
   std::map<DemandMatrix::NodePair, std::pair<size_t, net::Delay>> out;
   for (const DemandMatrixElement& element : elements_) {
-    ShortestPath sp(element.src, {element.dst}, {},
-                    graph_storage_->AdjacencyList(), nullptr, nullptr);
+    ShortestPath sp(element.src, {element.dst}, {}, graph_->AdjacencyList(),
+                    nullptr, nullptr);
     std::unique_ptr<Walk> shortest_path = sp.GetPath(element.dst);
     out[{element.src, element.dst}] = {shortest_path->size(),
                                        shortest_path->delay()};
@@ -98,7 +98,7 @@ double DemandMatrix::SPGlobalUtilization() const {
   for (const auto& link_index_and_utilization : sp_utilizaiton) {
     net::GraphLinkIndex link_index = link_index_and_utilization.first;
     double utilization = *link_index_and_utilization.second;
-    double capacity = graph_storage_->GetLink(link_index)->bandwidth().Mbps();
+    double capacity = graph_->GetLink(link_index)->bandwidth().Mbps();
     double load = utilization * capacity;
 
     total_load += load;
@@ -109,10 +109,10 @@ double DemandMatrix::SPGlobalUtilization() const {
 }
 
 std::unique_ptr<DemandMatrix> DemandMatrix::Scale(double factor) const {
-  auto tm = make_unique<DemandMatrix>(elements_, graph_storage_);
+  auto tm = make_unique<DemandMatrix>(elements_, graph_);
   for (auto& element : tm->elements_) {
-    double new_load = element.load.Mbps() * factor;
-    element.load = net::Bandwidth::FromMBitsPerSecond(new_load);
+    double new_load = element.demand.Mbps() * factor;
+    element.demand = net::Bandwidth::FromMBitsPerSecond(new_load);
   }
 
   return tm;
@@ -122,22 +122,22 @@ std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
   net::Bandwidth max_rate = net::Bandwidth::Zero();
   const DemandMatrixElement* element_ptr = nullptr;
   for (const DemandMatrixElement& element : elements_) {
-    if (element.load > max_rate) {
+    if (element.demand > max_rate) {
       element_ptr = &element;
-      max_rate = element.load;
+      max_rate = element.demand;
     }
   }
   CHECK(element_ptr != nullptr);
 
   std::vector<DemandMatrixElement> new_elements = {*element_ptr};
-  return make_unique<DemandMatrix>(new_elements, graph_storage_);
+  return make_unique<DemandMatrix>(new_elements, graph_);
 }
 
 std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
     const net::GraphLinkSet& to_exclude) const {
-  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_storage_);
+  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_);
   for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.load);
+    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
   }
 
   net::Bandwidth max_flow = net::Bandwidth::Zero();
@@ -146,25 +146,25 @@ std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
 }
 
 bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude) const {
-  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_storage_);
+  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_);
   for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.load);
+    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
   }
 
   return max_flow_problem.IsFeasible();
 }
 
 double DemandMatrix::MaxCommodityScaleFractor() const {
-  lp::MaxFlowMCProblem max_flow_problem({}, graph_storage_);
+  lp::MaxFlowMCProblem max_flow_problem({}, graph_);
   for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.load);
+    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
   }
 
   return max_flow_problem.MaxCommodityScaleFactor();
 }
 
 bool DemandMatrix::ResilientToFailures() const {
-  for (net::GraphLinkIndex link : graph_storage_->AllLinks()) {
+  for (net::GraphLinkIndex link : graph_->AllLinks()) {
     if (!IsFeasible({link})) {
       return false;
     }
@@ -176,12 +176,80 @@ bool DemandMatrix::ResilientToFailures() const {
 std::string DemandMatrix::ToString() const {
   std::string out;
   for (const auto& element : elements_) {
-    const std::string& src = graph_storage_->GetNode(element.src)->id();
-    const std::string& dst = graph_storage_->GetNode(element.dst)->id();
+    const std::string& src = graph_->GetNode(element.src)->id();
+    const std::string& dst = graph_->GetNode(element.dst)->id();
 
-    out += StrCat("(", src, ",", dst, ") -> ", element.load.Mbps(), "mbps\n");
+    out += StrCat("(", src, ",", dst, ") -> ", element.demand.Mbps(), "mbps\n");
   }
   return out;
+}
+
+// Parses a line of the form <tag> <count> and returns count.
+static uint32_t ParseCountOrDie(const std::string& tag,
+                                const std::string& line) {
+  std::vector<std::string> line_split = Split(line, " ");
+  CHECK(line_split.size() == 2);
+  CHECK(line_split[0] == tag);
+
+  uint32_t count;
+  CHECK(safe_strtou32(line_split[1], &count));
+  return count;
+}
+
+std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaOrDie(
+    const std::string& matrix_string,
+    const std::vector<std::string>& node_names,
+    const net::GraphStorage* graph) {
+  std::vector<std::string> all_lines = Split(matrix_string, "\n");
+  auto it = all_lines.begin();
+
+  const std::string& demands_line = *it;
+  uint32_t num_demands = ParseCountOrDie("DEMANDS", demands_line);
+
+  // Skip free form line.
+  ++it;
+
+  std::map<std::pair<net::GraphNodeIndex, net::GraphNodeIndex>, double>
+      total_demands;
+  for (uint32_t i = 0; i < num_demands; ++i) {
+    ++it;
+
+    std::vector<std::string> line_split = Split(*it, " ");
+    CHECK(line_split.size() == 4) << *it << " demand " << i;
+
+    uint32_t src_index;
+    uint32_t dst_index;
+    double demand_kbps;
+
+    CHECK(safe_strtou32(line_split[1], &src_index));
+    CHECK(safe_strtou32(line_split[2], &dst_index));
+    CHECK(safe_strtod(line_split[3], &demand_kbps));
+
+    CHECK(src_index < node_names.size()) << src_index << " line " << *it;
+    CHECK(dst_index < node_names.size()) << dst_index << " line " << *it;
+
+    net::GraphNodeIndex src = graph->NodeFromStringOrDie(node_names[src_index]);
+    net::GraphNodeIndex dst = graph->NodeFromStringOrDie(node_names[dst_index]);
+
+    total_demands[{src, dst}] += demand_kbps;
+  }
+
+  std::vector<DemandMatrixElement> elements;
+  for (const auto& src_and_dst_and_demand : total_demands) {
+    double demand_kbps = src_and_dst_and_demand.second;
+    if (demand_kbps < 1) {
+      continue;
+    }
+
+    net::GraphNodeIndex src;
+    net::GraphNodeIndex dst;
+    std::tie(src, dst) = src_and_dst_and_demand.first;
+
+    net::Bandwidth demand = net::Bandwidth::FromKBitsPerSecond(demand_kbps);
+    elements.emplace_back(src, dst, demand);
+  }
+
+  return make_unique<DemandMatrix>(std::move(elements), graph);
 }
 
 void DemandGenerator::AddUtilizationConstraint(double fraction,

@@ -18,12 +18,12 @@ namespace lp {
 // A single demand--source, destination and traffic volume.
 struct DemandMatrixElement {
   DemandMatrixElement(net::GraphNodeIndex src, net::GraphNodeIndex dst,
-                      net::Bandwidth load)
-      : src(src), dst(dst), load(load) {}
+                      net::Bandwidth demand)
+      : src(src), dst(dst), demand(demand) {}
 
   net::GraphNodeIndex src;
   net::GraphNodeIndex dst;
-  net::Bandwidth load;
+  net::Bandwidth demand;
 };
 
 // A collection of demands.
@@ -31,16 +31,24 @@ class DemandMatrix {
  public:
   using NodePair = std::pair<net::GraphNodeIndex, net::GraphNodeIndex>;
 
+  // Loads a TraffixMatrix from a string in the format used by
+  // https://bitbucket.org/StevenGay/repetita/src. All demands will have the
+  // same priority level.
+  static std::unique_ptr<DemandMatrix> LoadRepetitaOrDie(
+      const std::string& matrix_string,
+      const std::vector<std::string>& node_names,
+      const net::GraphStorage* graph);
+
   DemandMatrix(const std::vector<DemandMatrixElement>& elements,
-               const net::GraphStorage* graph_storage)
-      : elements_(elements), graph_storage_(graph_storage) {
-    CHECK(graph_storage != nullptr);
+               const net::GraphStorage* graph)
+      : elements_(elements), graph_(graph) {
+    CHECK(graph_ != nullptr);
   }
 
   DemandMatrix(std::vector<DemandMatrixElement>&& elements,
-               const net::GraphStorage* graph_storage)
-      : elements_(std::move(elements)), graph_storage_(graph_storage) {
-    CHECK(graph_storage != nullptr);
+               const net::GraphStorage* graph)
+      : elements_(std::move(elements)), graph_(graph) {
+    CHECK(graph_ != nullptr);
   }
 
   // The elements of this demand matrix.
@@ -92,11 +100,11 @@ class DemandMatrix {
   // Prints the matrix.
   std::string ToString() const;
 
-  const net::GraphStorage* graph_storage() const { return graph_storage_; }
+  const net::GraphStorage* graph() const { return graph_; }
 
  private:
   std::vector<DemandMatrixElement> elements_;
-  const net::GraphStorage* graph_storage_;
+  const net::GraphStorage* graph_;
 
   DISALLOW_COPY_AND_ASSIGN(DemandMatrix);
 };
