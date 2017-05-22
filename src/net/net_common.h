@@ -310,8 +310,19 @@ class Walk {
 
 // General statistics about a graph.
 struct GraphStats {
+  size_t links_count;
+  size_t nodes_count;
+
   size_t unidirectional_links;
   size_t multiple_links;
+
+  // The following vectors have 101 values each.
+  std::vector<Bandwidth> link_capacity_percentiles;
+  std::vector<Delay> link_delay_percentiles;
+  std::vector<size_t> node_out_degree_percentiles;
+  std::vector<size_t> node_in_degree_percentiles;
+
+  std::string ToString();
 };
 
 // Used to build a graph.

@@ -15,6 +15,7 @@
 
 #include "../map_util.h"
 #include "../substitute.h"
+#include "../stats.h"
 
 namespace nc {
 namespace net {
@@ -80,12 +81,19 @@ std::string GraphStorage::GetClusterName(const GraphNodeSet& nodes) const {
 
 GraphStats GraphStorage::Stats() const {
   std::map<std::pair<GraphNodeIndex, GraphNodeIndex>, size_t> adjacency;
+  std::map<GraphNodeIndex, size_t> in_degrees;
+  std::map<GraphNodeIndex, size_t> out_degrees;
+  std::vector<Bandwidth> all_bandwidths;
+  std::vector<Delay> all_delays;
   for (GraphLinkIndex link : AllLinks()) {
     const GraphLink* link_ptr = GetLink(link);
     GraphNodeIndex src = link_ptr->src();
     GraphNodeIndex dst = link_ptr->dst();
     ++adjacency[{src, dst}];
     adjacency[{dst, src}];
+
+    all_bandwidths.emplace_back(link_ptr->bandwidth());
+    all_delays.emplace_back(link_ptr->delay());
   }
 
   size_t multiple_links = 0;
@@ -94,9 +102,15 @@ GraphStats GraphStorage::Stats() const {
     GraphNodeIndex src;
     GraphNodeIndex dst;
     std::tie(src, dst) = src_and_dst_and_count.first;
+    size_t fw_count = src_and_dst_and_count.second;
+
+    out_degrees[src] += fw_count;
+    out_degrees[dst];
+
+    in_degrees[dst] += fw_count;
+    in_degrees[src];
 
     if (src > dst) {
-      size_t fw_count = src_and_dst_and_count.second;
       size_t rev_count = adjacency[{dst, src}];
       size_t diff =
           std::max(fw_count, rev_count) - std::min(fw_count, rev_count);
@@ -110,7 +124,60 @@ GraphStats GraphStorage::Stats() const {
     }
   }
 
-  return {unidirectional_links, multiple_links};
+  std::vector<size_t> all_in_degress;
+  AppendValuesFromMap(in_degrees, &all_in_degress);
+
+  std::vector<size_t> all_out_degress;
+  AppendValuesFromMap(out_degrees, &all_out_degress);
+
+  GraphStats to_return;
+  to_return.nodes_count = NodeCount();
+  to_return.links_count = LinkCount();
+  to_return.unidirectional_links = unidirectional_links;
+  to_return.multiple_links = multiple_links;
+  to_return.link_capacity_percentiles = Percentiles(&all_bandwidths);
+  to_return.link_delay_percentiles = Percentiles(&all_delays);
+  to_return.node_in_degree_percentiles = Percentiles(&all_in_degress);
+  to_return.node_out_degree_percentiles = Percentiles(&all_out_degress);
+
+  return to_return;
+}
+
+static std::string DelayToStr(Delay delay) {
+  using namespace std::chrono;
+  uint64_t count_micros = duration_cast<microseconds>(delay).count();
+  return StrCat(count_micros, " μs");
+}
+
+std::string GraphStats::ToString() {
+  std::string link_capacities_str = Substitute(
+      "[min: $0 Mbps, 50p: $1 Mbps, 90p: $2 Mbps, max: $3 Mbps]",
+      link_capacity_percentiles[0].Mbps(), link_capacity_percentiles[50].Mbps(),
+      link_capacity_percentiles[90].Mbps(),
+      link_capacity_percentiles[100].Mbps());
+
+  std::string link_delays_str =
+      Substitute("[min: $0, 50p: $1, 90p: $2, max: $3]",
+                 DelayToStr(link_delay_percentiles[0]),
+                 DelayToStr(link_delay_percentiles[50]),
+                 DelayToStr(link_delay_percentiles[90]),
+                 DelayToStr(link_delay_percentiles[100]));
+
+  std::string in_degree_str = Substitute(
+      "[min: $0, 50p: $1, 90p: $2, max: $3]", node_in_degree_percentiles[0],
+      node_in_degree_percentiles[50], node_in_degree_percentiles[90],
+      node_in_degree_percentiles[100]);
+
+  std::string out_degree_str = Substitute(
+      "[min: $0, 50p: $1, 90p: $2, max: $3]", node_out_degree_percentiles[0],
+      node_out_degree_percentiles[50], node_out_degree_percentiles[90],
+      node_out_degree_percentiles[100]);
+
+  return Substitute(
+      "nodes: $0, links: $1, unidirectional links: $2, multiple links: $3\n"
+      "link capacities: $4\nlink delays: $5\nin degrees: $6\nout degrees: $7",
+      nodes_count, links_count, unidirectional_links, multiple_links,
+      link_capacities_str, link_delays_str, in_degree_str, out_degree_str);
 }
 
 std::unique_ptr<GraphStorage> GraphStorage::ClusterNodes(
