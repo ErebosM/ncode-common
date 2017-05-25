@@ -118,6 +118,10 @@ class TypesafeUintWrapper {
     return a.m_val_ > b.m_val_;
   }
 
+  friend bool operator<=(TypesafeUintWrapper a, TypesafeUintWrapper b) {
+    return a.m_val_ <= b.m_val_;
+  }
+
   friend bool operator>=(TypesafeUintWrapper a, TypesafeUintWrapper b) {
     return a.m_val_ >= b.m_val_;
   }

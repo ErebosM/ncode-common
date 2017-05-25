@@ -83,6 +83,15 @@ class Bandwidth : public TypesafeUintWrapper<BandwidthTag, uint64_t> {
     return Bandwidth(m_val_ * fraction);
   }
 
+  friend Bandwidth operator+(Bandwidth a, Bandwidth b) {
+    return Bandwidth(a.m_val_ + b.m_val_);
+  }
+
+  friend Bandwidth operator-(Bandwidth a, Bandwidth b) {
+    DCHECK(a.m_val_ >= b.m_val_);
+    return Bandwidth(a.m_val_ - b.m_val_);
+  }
+
  private:
   constexpr Bandwidth(uint64_t value_bps)
       : TypesafeUintWrapper<BandwidthTag, uint64_t>(value_bps) {}
