@@ -352,8 +352,8 @@ var zoom = d3.behavior.zoom()
 
 var force = d3.layout.force()
   .charge(-200)
-  .linkDistance(function(d) {
-    return d.distance_hint > 1 ? d.distance_hint : 2 * NODE_RADIUS;
+  .linkStrength(function(d) {
+    return d.strength;
   })
   .size([window.innerWidth, window.innerHeight]);
 

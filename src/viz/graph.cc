@@ -36,7 +36,7 @@ struct LinkDataHelper {
   std::vector<double> reverse_load;
   std::string forward_tooltip;
   std::string reverse_tooltip;
-  size_t distance_hint;
+  double strength;
 };
 
 // Like LinkData, but for paths.
@@ -51,7 +51,7 @@ using LinkDataMap = std::map<size_t, std::map<size_t, LinkDataHelper>>;
 void GraphToHTML(const std::vector<EdgeData>& edges,
                  const std::vector<PathData>& paths,
                  const std::vector<DisplayMode>& display_modes,
-                 const net::GraphStorage* storage, HtmlPage* out,
+                 const net::GraphStorage& graph_storage, HtmlPage* out,
                  LocalizerCallback localizer) {
   CHECK(!display_modes.empty()) << "At least one display mode required";
 
@@ -67,16 +67,23 @@ void GraphToHTML(const std::vector<EdgeData>& edges,
   // Need to invert the node_id_to_node_index map. This will also sort the
   // NodeData instances by index.
   std::map<net::GraphNodeIndex, std::string> node_index_to_node_id;
-  for (const auto& node_id_and_node_index : storage->NodeIdToIndex()) {
+  for (const auto& node_id_and_node_index : graph_storage.NodeIdToIndex()) {
     const std::string& node_id = node_id_and_node_index.first;
     CHECK(!node_id.empty());
     net::GraphNodeIndex node_index = node_id_and_node_index.second;
     node_index_to_node_id.emplace(node_index, node_id);
   }
 
+  double max_hint = 1.0;
   for (const EdgeData& edge_data : edges) {
-    net::GraphNodeIndex src_index = storage->GetLink(edge_data.link)->src();
-    net::GraphNodeIndex dst_index = storage->GetLink(edge_data.link)->dst();
+    max_hint = std::max(static_cast<double>(edge_data.distance_hint), max_hint);
+  }
+
+  for (const EdgeData& edge_data : edges) {
+    net::GraphNodeIndex src_index =
+        graph_storage.GetLink(edge_data.link)->src();
+    net::GraphNodeIndex dst_index =
+        graph_storage.GetLink(edge_data.link)->dst();
     CHECK(ContainsKey(node_index_to_node_id, src_index)) << src_index;
     CHECK(ContainsKey(node_index_to_node_id, dst_index)) << dst_index;
     CHECK(src_index != dst_index);
@@ -90,7 +97,7 @@ void GraphToHTML(const std::vector<EdgeData>& edges,
         src_to_dst_to_link_data[src_index][dst_index];
     link_data_helper.src_index = src_index;
     link_data_helper.dst_index = dst_index;
-    link_data_helper.distance_hint = edge_data.distance_hint;
+    link_data_helper.strength = 1 - (edge_data.distance_hint / max_hint);
 
     CHECK(edge_data.load.size() == display_modes.size());
     if (forward) {
@@ -114,8 +121,8 @@ void GraphToHTML(const std::vector<EdgeData>& edges,
 
     const net::Links& links_on_path = path->links();
     for (net::GraphLinkIndex link : links_on_path) {
-      net::GraphNodeIndex src_index = storage->GetLink(link)->src();
-      net::GraphNodeIndex dst_index = storage->GetLink(link)->dst();
+      net::GraphNodeIndex src_index = graph_storage.GetLink(link)->src();
+      net::GraphNodeIndex dst_index = graph_storage.GetLink(link)->dst();
 
       // Each source will be added to the path's nodes, as well as the
       // destination of the last link.
@@ -158,7 +165,7 @@ void GraphToHTML(const std::vector<EdgeData>& edges,
     link_object["target"] = link_data->dst_index;
     link_object["forward_tooltip"] = link_data->forward_tooltip;
     link_object["reverse_tooltip"] = link_data->reverse_tooltip;
-    link_object["distance_hint"] = link_data->distance_hint;
+    link_object["strength"] = link_data->strength;
 
     CHECK(!link_data->forward_load.empty()) << link_data->src_index << " "
                                             << link_data->dst_index;

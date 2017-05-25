@@ -447,7 +447,10 @@ std::string Walk::ToStringIdsOnly(const GraphStorage& storage) const {
   const GraphLink* link = storage.GetLink(links_.back());
   ss << link->dst();
   ss << "] ";
-  ss << StrCat(delay_.count(), "μs");
+
+  double delay_ms =
+        std::chrono::duration<double, std::milli>(delay_).count();
+  ss << StrCat(delay_ms, "ms");
   return ss.str();
 }
 

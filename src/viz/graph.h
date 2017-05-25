@@ -74,10 +74,10 @@ using LocalizerCallback =
 void GraphToHTML(const std::vector<EdgeData>& edges,
                  const std::vector<PathData>& paths,
                  const std::vector<DisplayMode>& display_modes,
-                 const net::GraphStorage* storage, HtmlPage* out,
+                 const net::GraphStorage& graph, HtmlPage* out,
                  LocalizerCallback localizer = LocalizerCallback());
 
-}  // namespace web
+}  // namespace viz
 }  // namespace ncode
 
 #endif
