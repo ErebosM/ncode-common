@@ -266,6 +266,17 @@ TEST(PythonOutput, Bar) {
                          {data_series, other_data_series});
 }
 
+TEST(PythonOutput, Npy) {
+  std::vector<std::pair<std::string, NpyArray::FieldType>> fields;
+  fields.emplace_back("e1", NpyArray::UINT64);
+  fields.emplace_back("e2", NpyArray::DOUBLE);
+  fields.emplace_back("e3", NpyArray::STRING);
+
+  NpyArray npy_array(fields);
+  npy_array.AddRow({34, 5.0, "a"});
+  npy_array.ToDisk("npy_output_folder");
+}
+
 }  // namespace
 }  // namespace grapher
 }  // namespace nc

@@ -26,12 +26,16 @@ extern "C" const unsigned char grapher_line_py[];
 extern "C" const unsigned grapher_line_py_size;
 extern "C" const unsigned char grapher_bar_py[];
 extern "C" const unsigned grapher_bar_py_size;
+extern "C" const unsigned char grapher_npy_dump_py[];
+extern "C" const unsigned grapher_npy_dump_py_size;
 
 static constexpr char kPlotlyJS[] = "https://cdn.plot.ly/plotly-latest.min.js";
 
 static constexpr char kPythonGrapherCDFPlot[] = "cdf_plot";
 static constexpr char kPythonGrapherLinePlot[] = "line_plot";
 static constexpr char kPythonGrapherBarPlot[] = "bar_plot";
+static constexpr char kPythonNpyDump[] = "npy_dump";
+static constexpr char kPythonNpyDumpDTypeMarker[] = "dtype";
 static constexpr char kPythonGrapherCategoriesMarker[] = "categories";
 static constexpr char kPythonGrapherTitleMarker[] = "title";
 static constexpr char kPythonGrapherXLabelMarker[] = "xlabel";
@@ -39,6 +43,7 @@ static constexpr char kPythonGrapherYLabelMarker[] = "ylabel";
 static constexpr char kPythonGrapherFilesAndLabelsMarker[] = "files_and_labels";
 
 constexpr char HtmlGrapher::kDefaultGraphIdPrefix[];
+constexpr const char* NpyArray::kFieldTypeNames[];
 
 // Samples approximately N values at random, preserving order.
 template <typename T>
@@ -351,6 +356,11 @@ static void InitPythonPlotTemplates() {
                              grapher_bar_py_size);
     ctemplate::StringToTemplateCache(kPythonGrapherBarPlot, bar_template,
                                      ctemplate::DO_NOT_STRIP);
+    std::string npy_parse_template(
+        reinterpret_cast<const char*>(grapher_npy_dump_py),
+        grapher_npy_dump_py_size);
+    ctemplate::StringToTemplateCache(kPythonNpyDump, npy_parse_template,
+                                     ctemplate::DO_NOT_STRIP);
   }
 }
 
@@ -460,6 +470,95 @@ void PythonGrapher::PlotStackedArea(const PlotParameters2D& plot_params,
 PythonGrapher::PythonGrapher(const std::string& output_dir)
     : output_dir_(output_dir) {
   File::CreateDir(output_dir, 0700);
+}
+
+void NpyArray::AddRow(const std::vector<StringOrNumeric>& row) {
+  CHECK(row.size() == types_.size());
+  data_.emplace_back(row);
+}
+
+std::string NpyArray::StringOrNumeric::ToString(FieldType field) const {
+  if (is_num_) {
+    bool unsiged = (field == UINT8 || field == UINT16 || field == UINT32 ||
+                    field == UINT64);
+    if (unsiged) {
+      return std::to_string(static_cast<uint64_t>(num_));
+    }
+
+    return std::to_string(num_);
+  }
+
+  CHECK(field == STRING);
+  return str_;
+}
+
+NpyArray NpyArray::AddPrefixToFieldNames(const std::string& prefix) const {
+  Types types = types_;
+  for (auto& field_name_and_datatype : types) {
+    field_name_and_datatype.first =
+        StrCat(prefix, field_name_and_datatype.first);
+  }
+
+  NpyArray out(types);
+  out.data_ = data_;
+  return out;
+}
+
+std::string NpyArray::RowToString(
+    const std::vector<StringOrNumeric>& row) const {
+  std::vector<std::string> pieces;
+  for (size_t i = 0; i < row.size(); ++i) {
+    const StringOrNumeric& v = row[i];
+    pieces.emplace_back(v.ToString(types_[i].second));
+  }
+
+  return Join(pieces, " ");
+}
+
+void NpyArray::ToDisk(const std::string& output_dir) const {
+  File::CreateDir(output_dir, 0700);
+
+  std::string rows;
+  for (const std::vector<StringOrNumeric>& row : data_) {
+    StrAppend(&rows, RowToString(row), "\n");
+  }
+  File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"));
+
+  std::string script;
+  InitPythonPlotTemplates();
+  ctemplate::TemplateDictionary dictionary("Dump");
+  dictionary.SetValue(kPythonNpyDumpDTypeMarker, DTypeString());
+  CHECK(ctemplate::ExpandTemplate(kPythonNpyDump, ctemplate::DO_NOT_STRIP,
+                                  &dictionary, &script));
+  File::WriteStringToFileOrDie(script, StrCat(output_dir, "/parse.py"));
+}
+
+NpyArray NpyArray::Combine(const NpyArray& a1, const NpyArray& a2) {
+  CHECK(a1.data_.size() == a2.data_.size());
+  std::vector<std::pair<std::string, FieldType>> new_types;
+  new_types.insert(new_types.end(), a1.types_.begin(), a1.types_.end());
+  new_types.insert(new_types.end(), a2.types_.begin(), a2.types_.end());
+
+  NpyArray out(new_types);
+  for (size_t i = 0; i < a1.data_.size(); ++i) {
+    std::vector<StringOrNumeric> new_row;
+    new_row.insert(new_row.end(), a1.data_[i].begin(), a1.data_[i].end());
+    new_row.insert(new_row.end(), a2.data_[i].begin(), a2.data_[i].end());
+    out.AddRow(new_row);
+  }
+
+  return out;
+}
+
+std::string NpyArray::DTypeString() const {
+  std::vector<std::string> dtypes_as_str;
+  for (const auto& name_and_type : types_) {
+    dtypes_as_str.emplace_back(StrCat("('", name_and_type.first, "','",
+                                      kFieldTypeNames[name_and_type.second],
+                                      "')"));
+  }
+
+  return StrCat("[", Join(dtypes_as_str, ","), "]");
 }
 
 }  // namespace grapher

@@ -102,8 +102,7 @@ class HtmlGrapher : public Grapher {
   static constexpr size_t kDefaultMaxValues = 100000;
   static constexpr char kDefaultGraphIdPrefix[] = "graph";
 
-  HtmlGrapher(HtmlPage* page,
-              const std::string& id = kDefaultGraphIdPrefix)
+  HtmlGrapher(HtmlPage* page, const std::string& id = kDefaultGraphIdPrefix)
       : max_values_(kDefaultMaxValues),
         graph_id_prefix_(id),
         id_(0),
@@ -178,6 +177,66 @@ class PeriodicSequenceIntefrace {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PeriodicSequenceIntefrace);
+};
+
+// A 1D array of records that can be serialized and parsed from python.
+class NpyArray {
+ public:
+  enum FieldType { STRING, UINT8, UINT16, UINT32, UINT64, FLOAT, DOUBLE };
+
+  // Contains either a string or a number.
+  class StringOrNumeric {
+   public:
+    StringOrNumeric(const std::string& str)
+        : str_(str), num_(0), is_num_(false) {}
+    StringOrNumeric(const char* str) : str_(str), num_(0), is_num_(false) {}
+    StringOrNumeric(double num) : num_(num), is_num_(true) {}
+    StringOrNumeric(int64_t num) : num_(num), is_num_(true) {}
+    StringOrNumeric(uint64_t num) : num_(num), is_num_(true) {}
+
+    std::string ToString(FieldType field) const;
+
+   private:
+    std::string str_;
+    double num_;
+    bool is_num_;
+  };
+
+  // Describes the types of columns in the array. Each one also has a name.
+  using Types = std::vector<std::pair<std::string, FieldType>>;
+
+  // Combines two arrays so that the resulting array has a2's data 'glued' to
+  // the right of a1's data. Both arrays should have the same number of rows.
+  static NpyArray Combine(const NpyArray& a1, const NpyArray& a2);
+
+  NpyArray(const Types& types) : types_(types) {}
+
+  void AddRow(const std::vector<StringOrNumeric>& row);
+
+  // Returns the same array, but with a prefix added to all field names.
+  NpyArray AddPrefixToFieldNames(const std::string& prefix) const;
+
+  // In the folder 'out_dir' will create a text file called data where the data
+  // will be serialized one row at a time, whitespace-terminated. Will also
+  // create a file called parse.py where the data will be read into a structured
+  // numpy array.
+  void ToDisk(const std::string& output_dir) const;
+
+ private:
+  static constexpr const char* kFieldTypeNames[] = {"S256", "u1", "u2", "u4",
+                                                    "u8",   "f4", "f8"};
+
+  // Produces a dtype string that describes the data.
+  std::string DTypeString() const;
+
+  // Serializes a single row to a space-delimited string.
+  std::string RowToString(const std::vector<StringOrNumeric>& row) const;
+
+  // A list of names an types.
+  Types types_;
+
+  // The array's data.
+  std::vector<std::vector<StringOrNumeric>> data_;
 };
 
 // Ranks a sequence based on the total of its values.

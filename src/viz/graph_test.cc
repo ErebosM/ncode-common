@@ -37,7 +37,7 @@ TEST(Graph, SimpleGraph) {
   display_modes.emplace_back("Mode 2");
 
   HtmlPage page;
-  GraphToHTML(edge_data, path_data, display_modes, &graph_storage, &page);
+  GraphToHTML(edge_data, path_data, display_modes, graph_storage, &page);
   File::WriteStringToFile(page.Construct(), "graph.html");
 }
 
