@@ -191,8 +191,10 @@ class NpyArray {
         : str_(str), num_(0), is_num_(false) {}
     StringOrNumeric(const char* str) : str_(str), num_(0), is_num_(false) {}
     StringOrNumeric(double num) : num_(num), is_num_(true) {}
-    StringOrNumeric(int64_t num) : num_(num), is_num_(true) {}
-    StringOrNumeric(uint64_t num) : num_(num), is_num_(true) {}
+    StringOrNumeric(long num) : num_(num), is_num_(true) {}
+    StringOrNumeric(long long num) : num_(num), is_num_(true) {}
+    StringOrNumeric(unsigned long num) : num_(num), is_num_(true) {}
+    StringOrNumeric(unsigned long long num) : num_(num), is_num_(true) {}
 
     std::string ToString(FieldType field) const;
 
