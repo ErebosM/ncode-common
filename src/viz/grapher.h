@@ -209,20 +209,23 @@ class NpyArray {
 
   // Combines two arrays so that the resulting array has a2's data 'glued' to
   // the right of a1's data. Both arrays should have the same number of rows.
-  static NpyArray Combine(const NpyArray& a1, const NpyArray& a2);
+  NpyArray& Combine(const NpyArray& other);
 
   NpyArray(const Types& types) : types_(types) {}
 
   void AddRow(const std::vector<StringOrNumeric>& row);
 
-  // Returns the same array, but with a prefix added to all field names.
-  NpyArray AddPrefixToFieldNames(const std::string& prefix) const;
+  // Adds a prefix to all field names.
+  NpyArray& AddPrefixToFieldNames(const std::string& prefix);
+
+  // Removes all columns except for the ones listed.
+  NpyArray& Isolate(const std::set<std::string>& fields);
 
   // In the folder 'out_dir' will create a text file called data where the data
   // will be serialized one row at a time, whitespace-terminated. Will also
   // create a file called parse.py where the data will be read into a structured
-  // numpy array.
-  void ToDisk(const std::string& output_dir) const;
+  // numpy array. If 'fields' is specified, will only
+  void ToDisk(const std::string& output_dir, bool append = false) const;
 
  private:
   static constexpr const char* kFieldTypeNames[] = {"S256", "u1", "u2", "u4",

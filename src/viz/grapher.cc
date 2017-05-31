@@ -492,16 +492,13 @@ std::string NpyArray::StringOrNumeric::ToString(FieldType field) const {
   return str_;
 }
 
-NpyArray NpyArray::AddPrefixToFieldNames(const std::string& prefix) const {
-  Types types = types_;
-  for (auto& field_name_and_datatype : types) {
+NpyArray& NpyArray::AddPrefixToFieldNames(const std::string& prefix) {
+  for (auto& field_name_and_datatype : types_) {
     field_name_and_datatype.first =
         StrCat(prefix, field_name_and_datatype.first);
   }
 
-  NpyArray out(types);
-  out.data_ = data_;
-  return out;
+  return *this;
 }
 
 std::string NpyArray::RowToString(
@@ -515,14 +512,44 @@ std::string NpyArray::RowToString(
   return Join(pieces, " ");
 }
 
-void NpyArray::ToDisk(const std::string& output_dir) const {
+template <typename T>
+static void RemoveFields(const std::vector<char>& to_remove,
+                         std::vector<T>* data) {
+  std::vector<T> new_vector;
+  new_vector.reserve(data->size() - to_remove.size());
+  for (size_t i = 0; i < data->size(); ++i) {
+    if (to_remove[i]) {
+      continue;
+    }
+
+    new_vector.emplace_back((*data)[i]);
+  }
+
+  std::swap(*data, new_vector);
+}
+
+NpyArray& NpyArray::Isolate(const std::set<std::string>& fields) {
+  std::vector<char> to_remove;
+  for (size_t i = 0; i < types_.size(); ++i) {
+    const std::string& field_name = types_[i].first;
+    to_remove[i] = nc::ContainsKey(fields, field_name);
+  }
+
+  for (auto& data : data_) {
+    RemoveFields(to_remove, &data);
+  }
+
+  return *this;
+}
+
+void NpyArray::ToDisk(const std::string& output_dir, bool append) const {
   File::CreateDir(output_dir, 0700);
 
   std::string rows;
   for (const std::vector<StringOrNumeric>& row : data_) {
     StrAppend(&rows, RowToString(row), "\n");
   }
-  File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"));
+  File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"), append);
 
   std::string script;
   InitPythonPlotTemplates();
@@ -533,21 +560,16 @@ void NpyArray::ToDisk(const std::string& output_dir) const {
   File::WriteStringToFileOrDie(script, StrCat(output_dir, "/parse.py"));
 }
 
-NpyArray NpyArray::Combine(const NpyArray& a1, const NpyArray& a2) {
-  CHECK(a1.data_.size() == a2.data_.size());
-  std::vector<std::pair<std::string, FieldType>> new_types;
-  new_types.insert(new_types.end(), a1.types_.begin(), a1.types_.end());
-  new_types.insert(new_types.end(), a2.types_.begin(), a2.types_.end());
+NpyArray& NpyArray::Combine(const NpyArray& other) {
+  CHECK(data_.size() == other.data_.size());
+  types_.insert(types_.end(), other.types_.begin(), other.types_.end());
 
-  NpyArray out(new_types);
-  for (size_t i = 0; i < a1.data_.size(); ++i) {
-    std::vector<StringOrNumeric> new_row;
-    new_row.insert(new_row.end(), a1.data_[i].begin(), a1.data_[i].end());
-    new_row.insert(new_row.end(), a2.data_[i].begin(), a2.data_[i].end());
-    out.AddRow(new_row);
+  for (size_t i = 0; i < data_.size(); ++i) {
+    data_[i].insert(data_[i].end(), other.data_[i].begin(),
+                    other.data_[i].end());
   }
 
-  return out;
+  return *this;
 }
 
 std::string NpyArray::DTypeString() const {

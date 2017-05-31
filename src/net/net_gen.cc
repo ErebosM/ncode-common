@@ -569,6 +569,11 @@ GraphBuilder LoadRepetitaOrDie(
     CHECK(src_index < nodes.size());
     CHECK(dst_index < nodes.size());
 
+    if (nodes[src_index] == nodes[dst_index]) {
+      LOG(INFO) << "Ignoring loop at " << nodes[dst_index];
+      continue;
+    }
+
     builder.AddLink(
         {nodes[src_index], nodes[dst_index],
          Bandwidth::FromKBitsPerSecond(bw_kbps),

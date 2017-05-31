@@ -137,9 +137,15 @@ bool File::WriteStringToFile(const std::string& contents,
 }
 
 void File::WriteStringToFileOrDie(const std::string& contents,
-                                  const std::string& name) {
-  FILE* file = fopen(name.c_str(), "wb");
-  CHECK(file != NULL) << "fopen(" << name << ", \"wb\"): " << strerror(errno);
+                                  const std::string& name, bool append) {
+  const char* mode = "wb";
+  if (append) {
+    mode = "ab";
+  }
+
+  FILE* file = fopen(name.c_str(), mode);
+  CHECK(file != NULL) << "fopen(" << name << ", \"" << mode
+                      << "\"): " << strerror(errno);
   CHECK_EQ(fwrite(contents.data(), 1, contents.size(), file), contents.size())
       << "fwrite(" << name << "): " << strerror(errno);
   CHECK(fclose(file) == 0) << "fclose(" << name << "): " << strerror(errno);

@@ -448,8 +448,7 @@ std::string Walk::ToStringIdsOnly(const GraphStorage& storage) const {
   ss << link->dst();
   ss << "] ";
 
-  double delay_ms =
-        std::chrono::duration<double, std::milli>(delay_).count();
+  double delay_ms = std::chrono::duration<double, std::milli>(delay_).count();
   ss << StrCat(delay_ms, "ms");
   return ss.str();
 }
@@ -661,7 +660,8 @@ std::string GraphLinkBase::ToStringNoPorts() const {
 void GraphBuilder::AddLink(const GraphLinkBase& link) {
   CHECK(!link.src_id().empty()) << "missing src id";
   CHECK(!link.dst_id().empty()) << "missing dst id";
-  CHECK(link.src_id() != link.dst_id()) << "src id same as dst id";
+  CHECK(link.src_id() != link.dst_id()) << "src id same as dst id: "
+                                        << link.src_id();
 
   if (!auto_port_numbers_) {
     CHECK(link.src_port() != DevicePortNumber::Zero());
