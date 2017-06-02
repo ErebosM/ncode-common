@@ -678,6 +678,27 @@ void GraphBuilder::AddLink(const GraphLinkBase& link) {
                       link.bandwidth(), link.delay());
 }
 
+void GraphBuilder::RemoveMultipleLinks() {
+  std::map<std::string, std::map<std::string, GraphLinkBase*>> links_no_multi;
+  for (auto& link : links_) {
+    auto& link_base = links_no_multi[link.src_id()][link.dst_id()];
+    if (link_base != nullptr) {
+      link_base->AddToBandwidth(link.bandwidth());
+      continue;
+    }
+
+    link_base = &link;
+  }
+
+  std::vector<GraphLinkBase> new_links;
+  for (const auto& src_and_rest : links_no_multi) {
+    for (const auto& dst_and_link_ptr : src_and_rest.second) {
+      new_links.emplace_back(*dst_and_link_ptr.second);
+    }
+  }
+  std::swap(links_, new_links);
+}
+
 bool operator==(const GraphLinkBase& a, const GraphLinkBase& b) {
   return std::tie(a.src_id_, a.dst_id_, a.src_port_, a.dst_port_, a.bandwidth_,
                   a.delay_) == std::tie(b.src_id_, b.dst_id_, b.src_port_,

@@ -174,6 +174,8 @@ class GraphLinkBase {
 
   friend bool operator==(const GraphLinkBase& a, const GraphLinkBase& b);
 
+  void AddToBandwidth(Bandwidth bw) { bandwidth_ += bw; }
+
  private:
   std::string src_id_;
   std::string dst_id_;
@@ -341,6 +343,9 @@ class GraphBuilder {
       : auto_port_numbers_(auto_port_numbers) {}
 
   void AddLink(const GraphLinkBase& link);
+
+  // Combines multiple links between the same nodes into a single link.
+  void RemoveMultipleLinks();
 
   const std::vector<GraphLinkBase>& links() const { return links_; }
 
