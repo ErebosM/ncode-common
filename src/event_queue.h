@@ -108,6 +108,9 @@ class EventConsumer {
   // Should be called by the event queue.
   void HandleEventPublic();
 
+  // Number of events in the event queue for this consumer.
+  size_t outstanding_event_count() { return outstanding_event_count_; }
+
  protected:
   EventConsumer(const std::string& id, EventQueue* event_queue)
       : id_(id),
