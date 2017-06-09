@@ -9,6 +9,7 @@
 #include "../common.h"
 #include "../event_queue.h"
 #include "../net/net_common.h"
+#include "../net/pcap.h"
 #include "htsim.h"
 
 namespace nc {
@@ -89,6 +90,10 @@ class Packet {
   // Decrements TTL and returns true if it is still greater than 0.
   bool DecrementTTL();
 
+  bool is_tcp() const { return five_tuple_.ip_proto() == nc::net::kProtoTCP; }
+  bool is_udp() const { return five_tuple_.ip_proto() == nc::net::kProtoUDP; }
+  bool is_icmp() const { return five_tuple_.ip_proto() == nc::net::kProtoICMP; }
+
   // Creates a copy of the packet.
   virtual PacketPtr Duplicate() const = 0;
 
@@ -125,6 +130,12 @@ class TCPPacket : public Packet {
 
   void set_flags(uint8_t flags) { flags_ = flags; }
   uint8_t flags() const { return flags_; }
+
+  bool syn() const { return flags_ & nc::pcap::TCPHeader::kSynFlag; }
+
+  bool ack() const { return flags_ & nc::pcap::TCPHeader::kAckFlag; }
+
+  bool fin() const { return flags_ & nc::pcap::TCPHeader::kFinFlag; }
 
  private:
   SeqNum sequence_;
