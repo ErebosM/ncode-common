@@ -5,6 +5,7 @@
 #include <functional>
 #include <thread>
 #include <vector>
+#include <condition_variable>
 #include <mutex>
 
 namespace nc {

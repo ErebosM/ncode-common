@@ -34,12 +34,32 @@ struct DataSeries2D {
   std::vector<std::pair<double, double>> data;
 };
 
+// An annotated vertical line.
+struct VerticalLine {
+  double x;                // Location of the line.
+  std::string annotation;  // Label that will go next to the line.
+};
+
+// The range between x1 and x2 will be colored.
+struct ColoredRange {
+  double x1;
+  double x2;
+};
+
 // Parameters for a plot.
 struct PlotParameters {
   PlotParameters() {}
 
   // Title of the plot.
   std::string title;
+
+  // Vertical lines to plot. All lines within the same vector will share the
+  // same color.
+  std::vector<std::vector<VerticalLine>> vlines;
+
+  // Ranges on the x axis to highlight. All ranges within the same vector will
+  // share the same color.
+  std::vector<std::vector<ColoredRange>> ranges;
 };
 
 // Parameters for a 2d line plot.

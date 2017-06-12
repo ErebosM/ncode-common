@@ -41,6 +41,8 @@ static constexpr char kPythonGrapherTitleMarker[] = "title";
 static constexpr char kPythonGrapherXLabelMarker[] = "xlabel";
 static constexpr char kPythonGrapherYLabelMarker[] = "ylabel";
 static constexpr char kPythonGrapherFilesAndLabelsMarker[] = "files_and_labels";
+static constexpr char kPythonGrapherLinesAndLabelsMarker[] = "lines_and_labels";
+static constexpr char kPythonGrapherRangesMarker[] = "ranges";
 
 constexpr char HtmlGrapher::kDefaultGraphIdPrefix[];
 constexpr const char* NpyArray::kFieldTypeNames[];
@@ -402,14 +404,43 @@ static std::unique_ptr<ctemplate::TemplateDictionary> Plot(
     filenames_and_labels.emplace_back(
         StrCat("(", Quote(filename), ",", Quote(data_series.label), ")"));
   }
-
   std::string files_and_labels_var_contents =
       StrCat("[", Join(filenames_and_labels, ","), "]");
+
+  std::vector<std::string> lines_and_labels_l2;
+  for (const std::vector<VerticalLine>& vlines_with_same_color :
+       plot_params.vlines) {
+    std::vector<std::string> lines_and_labels;
+    for (const VerticalLine& vline : vlines_with_same_color) {
+      lines_and_labels.emplace_back(
+          StrCat("(", vline.x, ",", Quote(vline.annotation), ")"));
+    }
+
+    lines_and_labels_l2.emplace_back(
+        StrCat("[", Join(lines_and_labels, ","), "]"));
+  }
+  std::string lines_and_labels_var_contents =
+      StrCat("[", Join(lines_and_labels_l2, ","), "]");
+
+  std::vector<std::string> ranges_l2;
+  for (const std::vector<ColoredRange>& ranges_with_same_color :
+       plot_params.ranges) {
+    std::vector<std::string> ranges;
+    for (const ColoredRange& range : ranges_with_same_color) {
+      ranges.emplace_back(StrCat("(", range.x1, ",", range.x2, ")"));
+    }
+
+    ranges_l2.emplace_back(StrCat("[", Join(ranges, ","), "]"));
+  }
+  std::string ranges_var_contents = StrCat("[", Join(ranges_l2, ","), "]");
 
   InitPythonPlotTemplates();
   auto dictionary = make_unique<ctemplate::TemplateDictionary>("Plot");
   dictionary->SetValue(kPythonGrapherFilesAndLabelsMarker,
                        files_and_labels_var_contents);
+  dictionary->SetValue(kPythonGrapherLinesAndLabelsMarker,
+                       lines_and_labels_var_contents);
+  dictionary->SetValue(kPythonGrapherRangesMarker, ranges_var_contents);
   dictionary->SetValue(kPythonGrapherTitleMarker, plot_params.title);
   return dictionary;
 }
