@@ -428,7 +428,9 @@ std::string Walk::ToStringNoPorts(const GraphStorage& storage) const {
   const GraphLink* link = storage.GetLink(links_.back());
   ss << link->dst_node()->id();
   ss << "] ";
-  ss << StrCat(delay_.count(), "μs");
+
+  double delay_ms = std::chrono::duration<double, std::milli>(delay_).count();
+  ss << StrCat(delay_ms, "ms");
   return ss.str();
 }
 
