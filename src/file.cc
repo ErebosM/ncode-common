@@ -97,9 +97,10 @@ bool File::FileOrDirectory(const std::string& name, bool* directory) {
   return true;
 }
 
-int File::FileSizeOrDie(const std::string& name) {
-  struct stat statbuf;
-  CHECK(stat(name.c_str(), &statbuf) == 0) << "Bad fstat: " << strerror(errno);
+uint64_t File::FileSizeOrDie(const std::string& name) {
+  struct stat64 statbuf;
+  CHECK(stat64(name.c_str(), &statbuf) == 0) << "Bad fstat: "
+                                             << strerror(errno);
   CHECK(!S_ISDIR(statbuf.st_mode)) << "File is a directory: " << name;
   return statbuf.st_size;
 }

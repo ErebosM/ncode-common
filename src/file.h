@@ -58,7 +58,7 @@ class File {
   static bool FileOrDirectory(const std::string& name, bool* directory);
 
   // Returns the size of the given file in bytes.
-  static int FileSizeOrDie(const std::string& name);
+  static uint64_t FileSizeOrDie(const std::string& name);
 
   // Moves a file or crashes.
   static void MoveOrDie(const std::string& src, const std::string& dst);
