@@ -47,6 +47,8 @@ static constexpr char kPythonGrapherRangesMarker[] = "ranges";
 constexpr char HtmlGrapher::kDefaultGraphIdPrefix[];
 constexpr const char* NpyArray::kFieldTypeNames[];
 
+static constexpr size_t kMaxPythonCDFDatapoints = 10000;
+
 // Samples approximately N values at random, preserving order.
 template <typename T>
 static std::vector<T> SampleRandom(const std::vector<T>& values, size_t n) {
@@ -459,10 +461,25 @@ void PythonGrapher::PlotLine(const PlotParameters2D& plot_params,
   File::WriteStringToFileOrDie(script, StrCat(output_dir_, "/plot.py"));
 }
 
+// Samples a set of values. The vector will contain at most
+// kMaxPythonCDFDatapoints values.
+static void CDFSample(std::vector<double>* v) {
+  if (v->size() <= kMaxPythonCDFDatapoints) {
+    return;
+  }
+
+  std::vector<double> new_values = Percentiles(v, kMaxPythonCDFDatapoints);
+  std::swap(*v, new_values);
+}
+
 void PythonGrapher::PlotCDF(const PlotParameters1D& plot_params,
                             const std::vector<DataSeries1D>& series) {
-  auto dictionary = Plot<DataSeries1D>(
-      plot_params, Preprocess1DData(plot_params, series), output_dir_);
+  std::vector<DataSeries1D> data_series = Preprocess1DData(plot_params, series);
+  for (auto& series : data_series) {
+    CDFSample(&series.data);
+  }
+
+  auto dictionary = Plot<DataSeries1D>(plot_params, data_series, output_dir_);
   dictionary->SetValue(kPythonGrapherXLabelMarker, plot_params.data_label);
   dictionary->SetValue(kPythonGrapherYLabelMarker, "frequency");
 

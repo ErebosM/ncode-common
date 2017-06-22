@@ -349,6 +349,9 @@ class GraphBuilder {
 
   const std::vector<GraphLinkBase>& links() const { return links_; }
 
+  // Scales the capacity of all links by a fraction.
+  void ScaleCapacity(double fraction);
+
  private:
   // If true port numbers will be auto-assigned.
   bool auto_port_numbers_;

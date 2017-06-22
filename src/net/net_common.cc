@@ -701,6 +701,16 @@ void GraphBuilder::RemoveMultipleLinks() {
   std::swap(links_, new_links);
 }
 
+void GraphBuilder::ScaleCapacity(double fraction) {
+  std::vector<GraphLinkBase> new_links;
+  for (const auto& link : links_) {
+    new_links.emplace_back(link.src_id(), link.dst_id(), link.src_port(),
+                           link.dst_port(), link.bandwidth() * fraction,
+                           link.delay());
+  }
+  std::swap(links_, new_links);
+}
+
 bool operator==(const GraphLinkBase& a, const GraphLinkBase& b) {
   return std::tie(a.src_id_, a.dst_id_, a.src_port_, a.dst_port_, a.bandwidth_,
                   a.delay_) == std::tie(b.src_id_, b.dst_id_, b.src_port_,
