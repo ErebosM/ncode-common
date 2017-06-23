@@ -141,16 +141,6 @@ static std::vector<DataSeries1D> Preprocess1DData(
   return return_data;
 }
 
-static std::string ToStringMaxDecimals(double value, int decimals) {
-  std::ostringstream ss;
-  ss << std::fixed << std::setprecision(decimals) << value;
-  std::string s = ss.str();
-  if (decimals > 0 && s[s.find_last_not_of('0')] == '.') {
-    s.erase(s.size() - decimals + 1);
-  }
-  return s;
-}
-
 void HtmlGrapher::PlotLine(const PlotParameters2D& plot_params,
                            const std::vector<DataSeries2D>& series) {
   page_->AddScript(kPlotlyJS);

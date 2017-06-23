@@ -2,6 +2,8 @@
 
 #include <glob.h>
 #include <string>
+#include <iomanip>
+#include <iostream>
 
 namespace nc {
 
@@ -127,6 +129,16 @@ std::string RandomString(size_t length) {
   std::string str(length, 0);
   std::generate_n(str.begin(), length, randchar);
   return str;
+}
+
+std::string ToStringMaxDecimals(double value, int decimals) {
+  std::ostringstream ss;
+  ss << std::fixed << std::setprecision(decimals) << value;
+  std::string s = ss.str();
+  if (decimals > 0 && s[s.find_last_not_of('0')] == '.') {
+    s.erase(s.size() - decimals + 1);
+  }
+  return s;
 }
 
 }  // namespace nc

@@ -515,6 +515,9 @@ class CountdownTimer {
 // A-Za-z0-9.
 std::string RandomString(size_t length);
 
+// Prints a double with given precision.
+std::string ToStringMaxDecimals(double value, int decimals);
+
 }  // namespace nc
 
 #endif /* HT2SIM_COMMON_H */
