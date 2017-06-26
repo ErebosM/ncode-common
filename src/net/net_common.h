@@ -56,6 +56,7 @@ class Bandwidth : public TypesafeUintWrapper<BandwidthTag, uint64_t> {
     return Bandwidth::FromBitsPerSecond(std::numeric_limits<uint64_t>::max());
   }
   uint64_t bps() const { return m_val_; }
+  double Kbps() const { return m_val_ / 1000.0; }
   double Mbps() const { return m_val_ / 1000.0 / 1000.0; }
   double Gbps() const { return m_val_ / 1000.0 / 1000.0 / 1000.0; }
 

@@ -32,8 +32,7 @@ class DemandMatrix {
   using NodePair = std::pair<net::GraphNodeIndex, net::GraphNodeIndex>;
 
   // Loads a TraffixMatrix from a string in the format used by
-  // https://bitbucket.org/StevenGay/repetita/src. All demands will have the
-  // same priority level.
+  // https://bitbucket.org/StevenGay/repetita/src.
   static std::unique_ptr<DemandMatrix> LoadRepetitaOrDie(
       const std::string& matrix_string,
       const std::vector<std::string>& node_names,
@@ -56,6 +55,9 @@ class DemandMatrix {
 
   // Per-link utilization, when everything is routed over the shortest path.
   net::GraphLinkMap<double> SPUtilization() const;
+
+  // Number of links that, when routing over the SP, will be overloaded.
+  size_t OverloadedSPLinkCount() const;
 
   // For each ingress-egress pair returns the number of hops on the SP and the
   // delay of the path.
@@ -100,6 +102,10 @@ class DemandMatrix {
   // Prints the matrix.
   std::string ToString() const;
 
+  // Serializes this demand matrix into the format from
+  // https://bitbucket.org/StevenGay/repetita/src.
+  std::string ToRepetita(const std::vector<std::string>& node_names) const;
+
   const net::GraphStorage* graph() const { return graph_; }
 
  private:
@@ -116,7 +122,8 @@ class DemandGenerator {
       : graph_(graph),
         max_global_utilization_(std::numeric_limits<double>::max()),
         rnd_(seed),
-        min_scale_factor_(1.0) {}
+        min_scale_factor_(1.0),
+        min_overloaded_link_count_(1) {}
 
   // Adds a constraint that makes 'fraction' of all links have utilization less
   // than or equal to 'utilization' when demands are routed over their shortest
@@ -137,20 +144,20 @@ class DemandGenerator {
 
   void SetMinScaleFactor(double factor);
 
+  void SetMinOverloadedLinkCount(size_t link_count);
+
   // Adds a constraint that makes 'fraction' of all demands use up to
   // 'out_fraction' of their respective total outgoing capacity.
   void AddOutgoingFractionConstraint(double fraction, double out_fraction);
 
-  // Generates a matrix. If the explore_alternatives argument is true will
-  // generate kMaxTries matrices and pick the one with the highest global
-  // utility. The matrix will be scaled by the scale argument after generation
-  // (but this function guarantees that it will return a feasible matrix).
-  std::unique_ptr<DemandMatrix> GenerateMatrix(
-      bool explore_alternatives = false, double scale = 1.0);
+  // Generates a matrix. Will generate num_tries matrices and pick the one with
+  // the highest global utilization. The matrix will be scaled by the scale
+  // argument after generation (but this function guarantees that it will return
+  // a feasible matrix).
+  std::unique_ptr<DemandMatrix> GenerateMatrix(size_t num_tries,
+                                               double scale = 1.0);
 
  private:
-  static constexpr size_t kMaxTries = 10000;
-
   // Called by GenerateMatrix to generate a single matrix, if the matrix does
   // not satisfy the global utilization constraint it is discarded and this
   // function is called again.
@@ -182,6 +189,10 @@ class DemandGenerator {
   // All demands in the generated matrix should be scaleable by at least this
   // much, while keeping the matrix feasible.
   double min_scale_factor_;
+
+  // Minimum number of links that should be overloaded when routing over the
+  // shortest path.
+  size_t min_overloaded_link_count_;
 
   DISALLOW_COPY_AND_ASSIGN(DemandGenerator);
 };

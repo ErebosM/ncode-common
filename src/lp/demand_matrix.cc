@@ -56,6 +56,18 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
   return out;
 }
 
+size_t DemandMatrix::OverloadedSPLinkCount() const {
+  net::GraphLinkMap<double> link_utilization = SPUtilization();
+  size_t i = 0;
+  for (const auto& link_and_utilization : link_utilization) {
+    if (*link_and_utilization.second > 1.0) {
+      ++i;
+    }
+  }
+
+  return i;
+}
+
 net::Bandwidth DemandMatrix::TotalLoad() const {
   double load_mbps = 0;
   for (const DemandMatrixElement& element : elements_) {
@@ -174,12 +186,24 @@ bool DemandMatrix::ResilientToFailures() const {
 }
 
 std::string DemandMatrix::ToString() const {
+  std::vector<double> sp_utilizations;
+  nc::net::GraphLinkMap<double> per_link_utilization = SPUtilization();
+  for (const auto& link_and_utilization : per_link_utilization) {
+    sp_utilizations.emplace_back(*link_and_utilization.second);
+  }
+  std::sort(sp_utilizations.begin(), sp_utilizations.end());
+
   std::string out;
+  nc::StrAppend(
+      &out, nc::StrCat("TM with ", elements_.size(), " demands, scale factor ",
+                       MaxCommodityScaleFractor(), " sp link utilizations: ",
+                       nc::Join(sp_utilizations, ","), "\n"));
+
   for (const auto& element : elements_) {
     const std::string& src = graph_->GetNode(element.src)->id();
     const std::string& dst = graph_->GetNode(element.dst)->id();
 
-    out += StrCat("(", src, ",", dst, ") -> ", element.demand.Mbps(), "mbps\n");
+    out += StrCat("(", src, ",", dst, ") -> ", element.demand.Mbps(), "Mbps\n");
   }
   return out;
 }
@@ -252,6 +276,34 @@ std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaOrDie(
   return make_unique<DemandMatrix>(std::move(elements), graph);
 }
 
+std::string DemandMatrix::ToRepetita(
+    const std::vector<std::string>& node_names) const {
+  // node_names contains the nodes, as they were ordered in the topology file.
+  // Need to be able to refer to them by the index in the topology file.
+  net::GraphNodeMap<uint32_t> node_to_index_in_names;
+  for (net::GraphNodeIndex node : graph_->AllNodes()) {
+    std::string node_name = graph_->GetNode(node)->id();
+    auto it = std::find(node_names.begin(), node_names.end(), node_name);
+    CHECK(it != node_names.end());
+    uint32_t index = std::distance(node_names.begin(), it);
+    node_to_index_in_names[node] = index;
+  }
+
+  std::string out = StrCat("DEMANDS ", elements_.size(), "\n");
+  StrAppend(&out, "label src dest bw\n");
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    const DemandMatrixElement& element = elements_[i];
+
+    StrAppend(&out,
+              StrCat("demand_", i, " ",
+                     node_to_index_in_names.GetValueOrDie(element.src), " ",
+                     node_to_index_in_names.GetValueOrDie(element.dst), " ",
+                     element.demand.Kbps(), "\n"));
+  }
+
+  return out;
+}
+
 void DemandGenerator::AddUtilizationConstraint(double fraction,
                                                double utilization) {
   CHECK(utilization >= 0.0);
@@ -310,40 +362,47 @@ static void AddLocalityConstraint(
   }
 }
 
-std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(bool explore_alt,
+std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(size_t tries,
                                                               double scale) {
-  size_t tries = explore_alt ? kMaxTries : 1;
-
   double max_gu = 0;
+  double sf = 0;
   std::unique_ptr<DemandMatrix> best_matrix;
   for (size_t i = 0; i < tries; ++i) {
-    LOG(ERROR) << "i " << i;
     auto matrix = GenerateMatrixPrivate();
     if (!matrix) {
-      LOG(ERROR) << "A";
+      LOG(INFO) << "Try " << i << ": unable to generate";
       continue;
     }
 
     matrix = matrix->Scale(scale);
     if (!matrix->IsFeasible({})) {
-      LOG(ERROR) << "B";
+      LOG(INFO) << "Try " << i << ": not feasible after scaling";
       continue;
     }
 
     double scale_factor = matrix->MaxCommodityScaleFractor();
     CHECK(scale_factor < 10.0);
     if (scale_factor < min_scale_factor_) {
-      LOG(ERROR) << "C " << scale_factor;
+      LOG(INFO) << "Try " << i << ": scale factor too low";
+      continue;
+    }
+
+    size_t overloaded_link_count = matrix->OverloadedSPLinkCount();
+    if (overloaded_link_count < min_overloaded_link_count_) {
+      LOG(INFO) << "Try " << i << ": overloaded link count too low";
       continue;
     }
 
     double global_utilization = matrix->SPGlobalUtilization();
     if (global_utilization > max_gu) {
       max_gu = global_utilization;
+      sf = scale_factor;
       best_matrix = std::move(matrix);
     }
   }
 
+  LOG(INFO) << "Picked matrix with global utilization " << max_gu
+            << " scale factor " << sf;
   return best_matrix;
 }
 
@@ -539,6 +598,10 @@ void DemandGenerator::SetMaxGlobalUtilization(double fraction) {
 void DemandGenerator::SetMinScaleFactor(double factor) {
   CHECK(factor >= 1.0);
   min_scale_factor_ = factor;
+}
+
+void DemandGenerator::SetMinOverloadedLinkCount(size_t link_count) {
+  min_overloaded_link_count_ = link_count;
 }
 
 }  // namespace lp

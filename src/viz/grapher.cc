@@ -589,13 +589,18 @@ void NpyArray::ToDisk(const std::string& output_dir, bool append) const {
   }
   File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"), append);
 
+  std::string script_file = StrCat(output_dir, "/parse.py");
+  if (append && File::Exists(script_file)) {
+    return;
+  }
+
   std::string script;
   InitPythonPlotTemplates();
   ctemplate::TemplateDictionary dictionary("Dump");
   dictionary.SetValue(kPythonNpyDumpDTypeMarker, DTypeString());
   CHECK(ctemplate::ExpandTemplate(kPythonNpyDump, ctemplate::DO_NOT_STRIP,
                                   &dictionary, &script));
-  File::WriteStringToFileOrDie(script, StrCat(output_dir, "/parse.py"));
+  File::WriteStringToFileOrDie(script, script_file);
 }
 
 NpyArray& NpyArray::Combine(const NpyArray& other) {
