@@ -149,7 +149,7 @@ class DemandGenerator {
       bool explore_alternatives = false, double scale = 1.0);
 
  private:
-  static constexpr size_t kMaxTries = 100;
+  static constexpr size_t kMaxTries = 10000;
 
   // Called by GenerateMatrix to generate a single matrix, if the matrix does
   // not satisfy the global utilization constraint it is discarded and this

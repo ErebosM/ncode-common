@@ -317,19 +317,23 @@ std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(bool explore_alt,
   double max_gu = 0;
   std::unique_ptr<DemandMatrix> best_matrix;
   for (size_t i = 0; i < tries; ++i) {
+    LOG(ERROR) << "i " << i;
     auto matrix = GenerateMatrixPrivate();
     if (!matrix) {
+      LOG(ERROR) << "A";
       continue;
     }
 
     matrix = matrix->Scale(scale);
     if (!matrix->IsFeasible({})) {
+      LOG(ERROR) << "B";
       continue;
     }
 
     double scale_factor = matrix->MaxCommodityScaleFractor();
     CHECK(scale_factor < 10.0);
     if (scale_factor < min_scale_factor_) {
+      LOG(ERROR) << "C " << scale_factor;
       continue;
     }
 
