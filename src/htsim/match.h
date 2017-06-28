@@ -107,8 +107,7 @@ class MatchRuleAction {
   friend std::ostream& operator<<(std::ostream& output,
                                   const MatchRuleAction& op);
 
-  bool sample() const { return sample_; }
-  void set_sample(bool sample) { sample_ = sample; }
+
 
   bool preferential_drop() const { return preferential_drop_; }
   void set_preferential_drop(bool prefererential_drop) {
@@ -136,9 +135,8 @@ class MatchRuleAction {
   // Statistics.
   ActionStats stats_;
 
-  // If sampling is enabled on the device this action is installed on then
-  // packets that match this action will be sampled by the device.
-  bool sample_;
+  // Counts flows. Can be null.
+  std::unique_ptr<FlowCounter> flow_counter_;
 
   // If true packets matched by this action will have the preferential_drop flag
   // set. Once set the flag cannot be cleared by other rules.

@@ -148,8 +148,8 @@ class Device : public SimComponent, public PacketHandler {
     replies_handler_ = tx_replies_handler;
   }
 
-  // Enables 1 in N sampling of rules that request it.
-  void EnableSampling(PacketHandler* sample_hander, size_t n);
+  // Enables 1 in N sampling of packets for counting flows.
+  void EnableSampling(size_t n);
 
   // Adds observers that will observe packets that are transfered to/from
   // internal/external ports.
@@ -193,10 +193,6 @@ class Device : public SimComponent, public PacketHandler {
   // no replies are sent.
   PacketHandler* replies_handler_;
 
-  // Packet handler for sampled data. All sampled data from all rules goes
-  // there (if the handler is not null).
-  PacketHandler* sample_handler_;
-
   // All packets that move from internal to external ports are observed by this
   // observer (if not null).
   PacketObserver* internal_external_observer_;
@@ -205,7 +201,7 @@ class Device : public SimComponent, public PacketHandler {
   // observer (if not null).
   PacketObserver* external_internal_observer_;
 
-  // If set to non-0 will sample 1 in N matching packets.
+  // If set to non-0 will sample 1 in N matching packets for flow counting.
   double sample_prob_;
 
   // If sampling is used samples are drawn from this generator / distribution.

@@ -1,3 +1,6 @@
+#ifndef NC_DEMAND_MATRIX_H
+#define NC_DEMAND_MATRIX_H
+
 #include <stddef.h>
 #include <algorithm>
 #include <chrono>
@@ -199,3 +202,5 @@ class DemandGenerator {
 
 }  // namespace lp
 }  // namespace nc
+
+#endif
