@@ -11,6 +11,7 @@
 
 #include "../net/net_common.h"
 #include "packet.h"
+#include "flow_counter.h"
 
 namespace nc {
 namespace htsim {
@@ -69,12 +70,16 @@ struct ActionStats {
       : output_port(output_port),
         tag(tag),
         total_bytes_matched(0),
-        total_pkts_matched(0) {}
+        total_pkts_matched(0),
+        flow_count(std::numeric_limits<uint64_t>::max()) {}
   net::DevicePortNumber output_port;
   PacketTag tag;
 
   uint64_t total_bytes_matched;
   uint64_t total_pkts_matched;
+
+  // The flow count is only meaningful if it is not uint64_t::max.
+  uint64_t flow_count;
 };
 
 class MatchRule;
@@ -85,13 +90,15 @@ class MatchRuleAction {
   MatchRuleAction(net::DevicePortNumber output_port, PacketTag tag,
                   uint32_t weight);
 
+  MatchRuleAction(const MatchRuleAction& other);
+
   // Updates the stats of this action.
-  void UpdateStats(uint32_t bytes_matched);
+  void UpdateStats(const Packet& packet);
 
   inline net::DevicePortNumber output_port() const { return output_port_; }
   inline PacketTag tag() const { return tag_; }
   inline uint32_t weight() const { return weight_; }
-  const ActionStats& Stats() const { return stats_; }
+  ActionStats Stats(bool include_flow_count) const;
 
   // Sets the parent rule of this action. Will be called automatically when the
   // action is added to a rule.
@@ -107,8 +114,6 @@ class MatchRuleAction {
   friend std::ostream& operator<<(std::ostream& output,
                                   const MatchRuleAction& op);
 
-
-
   bool preferential_drop() const { return preferential_drop_; }
   void set_preferential_drop(bool prefererential_drop) {
     preferential_drop_ = prefererential_drop;
@@ -117,6 +122,11 @@ class MatchRuleAction {
   const MatchRule* parent_rule() const { return parent_rule_; }
 
   void MergeStats(const ActionStats& stats);
+
+  // Enables flow counting for this action. The counter will see 1 in N packets.
+  void EnableFlowCounter(size_t n, EventQueue* event_queue);
+
+  double flow_counter_sample_prob() const { return sample_prob_; }
 
  private:
   // Non-owning pointer to the rule this action is part of.
@@ -137,6 +147,13 @@ class MatchRuleAction {
 
   // Counts flows. Can be null.
   std::unique_ptr<FlowCounter> flow_counter_;
+
+  // If set to non-0 will sample 1 in N before sending them to flow_counter_.
+  double sample_prob_;
+
+  // If sampling is used samples are drawn from this generator / distribution.
+  std::mt19937 generator_;
+  std::uniform_real_distribution<double> distribution_;
 
   // If true packets matched by this action will have the preferential_drop flag
   // set. Once set the flag cannot be cleared by other rules.
@@ -177,7 +194,7 @@ class MatchRule {
   std::unique_ptr<MatchRule> Clone() const;
 
   // Will return stats for each action.
-  std::vector<ActionStats> Stats() const;
+  std::vector<ActionStats> Stats(bool include_flow_count) const;
 
   void set_parent_matcher(Matcher* matcher);
 
@@ -355,11 +372,16 @@ class SSCPStatsRequest : public SSCPMessage {
   static constexpr uint8_t kSSCPStatsRequestType = 253;
 
   SSCPStatsRequest(net::IPAddress ip_src, net::IPAddress ip_dst,
-                   EventQueueTime time_sent);
+                   EventQueueTime time_sent, bool include_flow_counts);
 
   PacketPtr Duplicate() const override;
 
   std::string ToString() const override;
+
+  bool include_flow_counts() const { return include_flow_counts_; }
+
+ private:
+  bool include_flow_counts_;
 };
 
 class SSCPStatsReply : public SSCPMessage {
@@ -410,7 +432,8 @@ class Matcher {
   const std::string& id() const { return id_; }
 
   // Populates the stats in a StatsReply.
-  void PopulateSSCPStats(SSCPStatsReply* stats_reply) const;
+  void PopulateSSCPStats(bool include_flow_counts,
+                         SSCPStatsReply* stats_reply) const;
 
  private:
   MatchRule* MatchOrNullFromList(const Packet& pkt,

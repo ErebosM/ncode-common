@@ -21,7 +21,7 @@ namespace nc {
 namespace htsim {
 
 // Forward references
-class Device;
+class DeviceInterface;
 class NetworkSim;
 
 class Port : public PacketHandler {
@@ -48,15 +48,17 @@ class Port : public PacketHandler {
   // Changes this port's internal/external status.
   void set_internal(bool internal) { internal_ = internal; }
 
+  bool internal() const { return internal_; }
+
  private:
-  Port(net::DevicePortNumber number, Device* device);
+  Port(net::DevicePortNumber number, DeviceInterface* device);
 
   // This port's number.
   const net::DevicePortNumber number_;
 
   // The device this port is attached to. This is a naked pointer since the
   // lifetime of the Port is tied to that of the device.
-  Device* parent_device_;
+  DeviceInterface* parent_device_;
 
   // The handler that packets will go to upon exiting via this port.
   PacketHandler* out_handler_;
@@ -65,8 +67,8 @@ class Port : public PacketHandler {
   // external->internal can be monitored on the device.
   bool internal_;
 
+  friend class DeviceInterface;
   DISALLOW_COPY_AND_ASSIGN(Port);
-  friend class Device;
 };
 
 class TCPRtxTimer;
@@ -86,9 +88,60 @@ struct DeviceStats {
   std::map<net::FiveTuple, ConnectionStats> connection_stats;
 };
 
+class DeviceInterface : public SimComponent, public PacketHandler {
+ public:
+  DeviceInterface(const std::string& id, nc::net::IPAddress ip_address,
+                  EventQueue* event_queue)
+      : SimComponent(id, event_queue),
+        ip_address_(ip_address),
+        network_(nullptr),
+        replies_handler_(nullptr) {}
+
+  virtual ~DeviceInterface() {}
+
+  // Finds or adds a port to this device. The returned pointer is non-owning.
+  Port* FindOrCreatePort(net::DevicePortNumber port_num);
+
+  // Creates a new port on the device with a unique for the device port number.
+  // This function will always return a new port.
+  Port* NextAvailablePort();
+
+  // Sets this device's Network. Will be called automatically when the device is
+  // added to the network.
+  void set_network(Network* network) { network_ = network; }
+
+  PacketHandler* tx_replies_handler() { return replies_handler_; }
+  void set_tx_replies_handler(PacketHandler* tx_replies_handler) {
+    replies_handler_ = tx_replies_handler;
+  }
+
+  // Called when one of this device's ports receives a packet. This is not the
+  // same as HandlePacket, which is called when a packet arrives that is
+  // destined for the device itself.
+  virtual void HandlePacketFromPort(Port* input_port, PacketPtr pkt) = 0;
+
+  // Returns this device's ip address.
+  net::IPAddress ip_address() const { return ip_address_; }
+
+ protected:
+  // This device's address.
+  net::IPAddress ip_address_;
+
+  // The parent network instance.
+  Network* network_;
+
+  // A map from port number to the port object.
+  std::map<net::DevicePortNumber, std::unique_ptr<Port>> port_number_to_port_;
+
+  // Replies to update messages and stats are sent out via this handler (instead
+  // of using the routing table to find a destination etc.). If this is  nullptr
+  // no replies are sent.
+  PacketHandler* replies_handler_;
+};
+
 // A device in the network. Each device can perform forwarding based on a set of
 // rules.
-class Device : public SimComponent, public PacketHandler {
+class Device : public DeviceInterface {
  public:
   static const net::DevicePortNumber kLoopbackPortNum;
 
@@ -110,25 +163,12 @@ class Device : public SimComponent, public PacketHandler {
     return return_stats;
   }
 
-  // Returns this device's ip address.
-  net::IPAddress ip_address() const { return ip_address_; }
-
-  // Called when one of this device's ports receives a packet. This is not the
-  // same as HandlePacket, which is called when a packet arrives that is
-  // destined for the device itself.
-  void HandlePacketFromPort(Port* input_port, PacketPtr pkt);
+  void HandlePacketFromPort(Port* input_port, PacketPtr pkt) override;
 
   // Returns a pointer to the loopback port. Traffic sent to this port will end
   // up in the device's stack and all traffic destined for this device will be
   // delivered to the loopback port.
   Port* GetLoopbackPort() { return FindOrCreatePort(kLoopbackPortNum); }
-
-  // Finds or adds a port to this device. The returned pointer is non-owning.
-  Port* FindOrCreatePort(net::DevicePortNumber port_num);
-
-  // Creates a new port on the device with a unique for the device port number.
-  // This function will always return a new port.
-  Port* NextAvailablePort();
 
   // Constructs a new TCP source and returns a non-owning pointer to it.
   TCPSource* AddTCPGenerator(net::IPAddress dst_address,
@@ -138,18 +178,6 @@ class Device : public SimComponent, public PacketHandler {
   // Constructs a new UDP source and returns a non-owning pointer to it.
   UDPSource* AddUDPGenerator(net::IPAddress dst_address,
                              net::AccessLayerPort dst_port);
-
-  // Sets this device's Network. Will be called automatically when the device is
-  // added to the network.
-  void set_network(Network* network) { network_ = network; }
-
-  PacketHandler* tx_replies_handler() { return replies_handler_; }
-  void set_tx_replies_handler(PacketHandler* tx_replies_handler) {
-    replies_handler_ = tx_replies_handler;
-  }
-
-  // Enables 1 in N sampling of packets for counting flows.
-  void EnableSampling(size_t n);
 
   // Adds observers that will observe packets that are transfered to/from
   // internal/external ports.
@@ -168,14 +196,8 @@ class Device : public SimComponent, public PacketHandler {
   // Picks a source port or throws an exception.
   net::FiveTuple PickSrcPortOrDie(const net::FiveTuple& tuple_with_no_src_port);
 
-  // This device's address.
-  net::IPAddress ip_address_;
-
   // Forwarding rules go here.
   Matcher matcher_;
-
-  // A map from port number to the port object.
-  std::map<net::DevicePortNumber, std::unique_ptr<Port>> port_number_to_port_;
 
   // Information about the device.
   DeviceStats stats_;
@@ -185,14 +207,6 @@ class Device : public SimComponent, public PacketHandler {
   std::unordered_map<net::FiveTuple, std::unique_ptr<Connection>,
                      net::FiveTupleHasher> connections_;
 
-  // The parent network instance.
-  Network* network_;
-
-  // Replies to update messages and stats are sent out via this handler (instead
-  // of using the routing table to find a destination etc.). If this is  nullptr
-  // no replies are sent.
-  PacketHandler* replies_handler_;
-
   // All packets that move from internal to external ports are observed by this
   // observer (if not null).
   PacketObserver* internal_external_observer_;
@@ -200,13 +214,6 @@ class Device : public SimComponent, public PacketHandler {
   // All packets that move from external to internal ports are observed by this
   // observer (if not null).
   PacketObserver* external_internal_observer_;
-
-  // If set to non-0 will sample 1 in N matching packets for flow counting.
-  double sample_prob_;
-
-  // If sampling is used samples are drawn from this generator / distribution.
-  std::mt19937 generator_;
-  std::uniform_real_distribution<double> distribution_;
 
   // Dies if a packet fails to match an entry in the routing table.
   bool die_on_fail_to_match_;
@@ -219,7 +226,7 @@ class Network : public SimComponent {
   Network(EventQueueTime tcp_retx_scan_period, EventQueue* event_queue);
 
   // Adds a device.
-  void AddDevice(Device* device);
+  void AddDevice(DeviceInterface* device);
 
   // Adds a link (unidirectional). The link is a queue that is connected to a
   // pipe. The source / dst of the pipe should already be present.
@@ -230,12 +237,12 @@ class Network : public SimComponent {
 
  private:
   // Finds a single device or dies.
-  Device& FindDeviceOrDie(const std::string& id) {
+  DeviceInterface& FindDeviceOrDie(const std::string& id) {
     return *FindOrDie(id_to_device_, id);
   }
 
   // Network components
-  std::map<std::string, Device*> id_to_device_;
+  std::map<std::string, DeviceInterface*> id_to_device_;
   std::map<std::string, Queue*> queue_id_to_queue_;
   std::map<std::string, Pipe*> pipe_id_to_pipe_;
 

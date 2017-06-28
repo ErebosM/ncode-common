@@ -38,8 +38,36 @@ MatchRuleAction::MatchRuleAction(net::DevicePortNumber output_port,
       tag_(tag),
       weight_(weight),
       stats_(output_port, tag),
-      sample_(false),
+      sample_prob_(0),
+      generator_(output_port.Raw() + weight),
+      distribution_(0, 1.0),
       preferential_drop_(false) {}
+
+MatchRuleAction::MatchRuleAction(const MatchRuleAction& other)
+    : MatchRuleAction(other.output_port_, other.tag_, other.weight_) {
+  preferential_drop_ = other.preferential_drop_;
+  if (other.sample_prob_ != 0) {
+    CHECK(other.flow_counter_);
+    EnableFlowCounter(1 / other.sample_prob_,
+                      other.flow_counter_->event_queue());
+  }
+}
+
+void MatchRuleAction::EnableFlowCounter(size_t n, EventQueue* event_queue) {
+  CHECK(n != 0);
+  sample_prob_ = 1.0 / n;
+  flow_counter_ = make_unique<FlowCounter>(event_queue);
+}
+
+ActionStats MatchRuleAction::Stats(bool include_flow_count) const {
+  if (!include_flow_count || !flow_counter_) {
+    return stats_;
+  }
+
+  ActionStats to_return = stats_;
+  to_return.flow_count = flow_counter_->EstimateCount();
+  return to_return;
+}
 
 double MatchRuleAction::FractionOfTraffic() const {
   CHECK(parent_rule_ != nullptr) << "No parent rule set yet!";
@@ -50,18 +78,25 @@ double MatchRuleAction::FractionOfTraffic() const {
   return weight_ / total_weight;
 }
 
-void MatchRuleAction::UpdateStats(uint32_t bytes_matched) {
+void MatchRuleAction::UpdateStats(const Packet& packet) {
   uint64_t prev = stats_.total_bytes_matched;
-  stats_.total_bytes_matched += bytes_matched;
+  stats_.total_bytes_matched += packet.size_bytes();
   stats_.total_pkts_matched += 1;
   CHECK(prev <= stats_.total_bytes_matched) << prev << " matched "
-                                            << bytes_matched;
+                                            << packet.size_bytes();
+
+  if (sample_prob_ != 0 && flow_counter_) {
+    if (distribution_(generator_) <= sample_prob_) {
+      flow_counter_->NewPacket(packet.five_tuple());
+    }
+  }
 }
 
 std::string MatchRuleAction::ToString() const {
   std::string out;
-  SubstituteAndAppend(&out, "(out: $0, tag: $1, sample: $2, ",
-                      output_port_.Raw(), tag_.Raw(), sample_);
+  SubstituteAndAppend(&out, "(out: $0, tag: $1, flow counter: $2, ",
+                      output_port_.Raw(), tag_.Raw(),
+                      flow_counter_.get() != nullptr);
   if (parent_rule_ != nullptr) {
     SubstituteAndAppend(&out, "w: $0)", FractionOfTraffic());
   } else {
@@ -112,7 +147,7 @@ std::vector<const MatchRuleAction*> MatchRule::actions() const {
 MatchRuleAction* MatchRule::ChooseOrNull(const Packet& packet) {
   MatchRuleAction* action = ChooseOrNull(packet.five_tuple());
   if (action != nullptr) {
-    action->UpdateStats(packet.size_bytes());
+    action->UpdateStats(packet);
   }
 
   return action;
@@ -159,10 +194,10 @@ std::string MatchRule::ToString() const {
   return out;
 }
 
-std::vector<ActionStats> MatchRule::Stats() const {
+std::vector<ActionStats> MatchRule::Stats(bool include_flow_count) const {
   std::vector<ActionStats> out;
   for (const auto& action : actions_) {
-    out.emplace_back(action->Stats());
+    out.emplace_back(action->Stats(include_flow_count));
   }
 
   return out;
@@ -173,7 +208,7 @@ void MatchRule::MergeStats(const MatchRule& other_rule) {
     for (const MatchRuleAction* other_action : other_rule.actions()) {
       if (action->tag() == other_action->tag() &&
           action->output_port() == other_action->output_port()) {
-        action->MergeStats(other_action->Stats());
+        action->MergeStats(other_action->Stats(false));
       }
     }
   }
@@ -237,19 +272,18 @@ void Matcher::AddRule(std::unique_ptr<MatchRule> rule) {
   LOG(INFO) << prefix << " rule " << rule_raw_ptr->ToString() << " at " << id_;
 }
 
-void Matcher::PopulateSSCPStats(SSCPStatsReply* stats_reply) const {
+void Matcher::PopulateSSCPStats(bool include_flow_counts,
+                                SSCPStatsReply* stats_reply) const {
   for (const auto& key_and_rule : all_rules_) {
-    stats_reply->AddStats(key_and_rule.first, key_and_rule.second->Stats());
+    stats_reply->AddStats(key_and_rule.first,
+                          key_and_rule.second->Stats(include_flow_counts));
   }
 }
 
 std::unique_ptr<MatchRule> MatchRule::Clone() const {
   auto clone = make_unique<MatchRule>(key_);
   for (const auto& action : actions_) {
-    auto action_clone = make_unique<MatchRuleAction>(
-        action->output_port(), action->tag(), action->weight());
-    action_clone->set_sample(action->sample());
-    action_clone->set_preferential_drop(action->preferential_drop());
+    auto action_clone = make_unique<MatchRuleAction>(*action);
     clone->AddAction(std::move(action_clone));
   }
 
@@ -332,19 +366,23 @@ std::pair<uint32_t, uint32_t> GetKeyAndWildcard<6>(
 }
 
 SSCPStatsRequest::SSCPStatsRequest(net::IPAddress ip_src, net::IPAddress ip_dst,
-                                   EventQueueTime time_sent)
-    : SSCPMessage(ip_src, ip_dst, kSSCPStatsRequestType, time_sent) {}
+                                   EventQueueTime time_sent,
+                                   bool include_flow_counts)
+    : SSCPMessage(ip_src, ip_dst, kSSCPStatsRequestType, time_sent),
+      include_flow_counts_(include_flow_counts) {}
 
 PacketPtr SSCPStatsRequest::Duplicate() const {
-  auto new_msg = make_unique<SSCPStatsRequest>(
-      five_tuple_.ip_src(), five_tuple_.ip_dst(), time_sent_);
+  auto new_msg =
+      make_unique<SSCPStatsRequest>(five_tuple_.ip_src(), five_tuple_.ip_dst(),
+                                    time_sent_, include_flow_counts_);
   return std::move(new_msg);
 }
 
 std::string SSCPStatsRequest::ToString() const {
-  return Substitute("MSG $0 -> $1 : SSCPStatsRequest",
+  return Substitute("MSG $0 -> $1 : SSCPStatsRequest, flow counts: $2",
                     net::IPToStringOrDie(five_tuple_.ip_src()),
-                    net::IPToStringOrDie(five_tuple_.ip_dst()));
+                    net::IPToStringOrDie(five_tuple_.ip_dst()),
+                    include_flow_counts_);
 }
 
 SSCPStatsReply::SSCPStatsReply(net::IPAddress ip_src, net::IPAddress ip_dst,

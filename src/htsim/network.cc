@@ -53,9 +53,13 @@ void Device::HandlePacket(PacketPtr pkt) {
         replies_handler_->HandlePacket(std::move(reply));
       }
     } else if (type == SSCPStatsRequest::kSSCPStatsRequestType) {
+      SSCPStatsRequest* stats_request_message =
+          static_cast<SSCPStatsRequest*>(pkt.get());
+
       auto reply = make_unique<SSCPStatsReply>(
           ip_address_, pkt->five_tuple().ip_src(), event_queue_->CurrentTime());
-      matcher_.PopulateSSCPStats(reply.get());
+      matcher_.PopulateSSCPStats(stats_request_message->include_flow_counts(),
+                                 reply.get());
 
       CHECK(replies_handler_)
           << "Received stats request, but no output handler";
@@ -158,32 +162,17 @@ UDPSource* Device::AddUDPGenerator(net::IPAddress dst_address,
 
 Device::Device(const std::string& id, net::IPAddress ip_address,
                EventQueue* event_queue)
-    : SimComponent(id, event_queue),
-      ip_address_(ip_address),
+    : DeviceInterface(id, ip_address, event_queue),
       matcher_("matcher_for_" + id),
-      network_(nullptr),
-      replies_handler_(nullptr),
-      sample_handler_(nullptr),
       internal_external_observer_(nullptr),
       external_internal_observer_(nullptr),
-      sample_prob_(0),
-      distribution_(0, 1.0),
       die_on_fail_to_match_(false) {}
 
-Port::Port(net::DevicePortNumber number, Device* device)
+Port::Port(net::DevicePortNumber number, DeviceInterface* device)
     : number_(number),
       parent_device_(device),
       out_handler_(nullptr),
       internal_(false) {}
-
-void Device::EnableSampling(PacketHandler* sample_hander, size_t n) {
-  sample_handler_ = sample_hander;
-  if (n != 0) {
-    sample_prob_ = 1.0 / n;
-  } else {
-    sample_prob_ = 0.0;
-  }
-}
 
 void Port::HandlePacket(PacketPtr pkt) {
   parent_device_->HandlePacketFromPort(this, std::move(pkt));
@@ -208,7 +197,7 @@ void Port::Reconnect(PacketHandler* out_handler) {
   out_handler_ = out_handler;
 }
 
-Port* Device::FindOrCreatePort(net::DevicePortNumber port_num) {
+Port* DeviceInterface::FindOrCreatePort(net::DevicePortNumber port_num) {
   auto it = port_number_to_port_.find(port_num);
   if (it != port_number_to_port_.end()) {
     return it->second.get();
@@ -222,7 +211,7 @@ Port* Device::FindOrCreatePort(net::DevicePortNumber port_num) {
   return port_naked_ptr;
 }
 
-Port* Device::NextAvailablePort() {
+Port* DeviceInterface::NextAvailablePort() {
   for (uint32_t i = 1; i < net::DevicePortNumber::Max().Raw(); ++i) {
     auto port_number = net::DevicePortNumber(i);
     if (ContainsKey(port_number_to_port_, port_number)) {
@@ -283,18 +272,11 @@ void Device::HandlePacketFromPort(Port* input_port, PacketPtr pkt) {
       << "Unable to find port " << Substitute("$0", action->output_port().Raw())
       << " at " << id();
 
-  if (sample_prob_ != 0 && action->sample()) {
-    if (distribution_(generator_) <= sample_prob_) {
-      PacketPtr new_pkt = pkt->Duplicate();
-      sample_handler_->HandlePacket(std::move(new_pkt));
-    }
-  }
-
   Port* output_port = it->second.get();
-  if (input_port->internal_ && !output_port->internal_ &&
+  if (input_port->internal() && !output_port->internal() &&
       internal_external_observer_) {
     internal_external_observer_->ObservePacket(*pkt);
-  } else if (!input_port->internal_ && output_port->internal_ &&
+  } else if (!input_port->internal() && output_port->internal() &&
              external_internal_observer_) {
     external_internal_observer_->ObservePacket(*pkt);
   }
@@ -322,7 +304,7 @@ Network::Network(EventQueueTime tcp_retx_scan_period, EventQueue* event_queue)
                                              tcp_retx_scan_period, event_queue);
 }
 
-void Network::AddDevice(Device* device) {
+void Network::AddDevice(DeviceInterface* device) {
   id_to_device_.emplace(device->id(), device);
   device->set_network(this);
 }
@@ -331,8 +313,8 @@ void Network::AddLink(Queue* queue, Pipe* pipe, bool internal) {
   const net::GraphLink* link = pipe->graph_link();
   CHECK(link->src() != link->dst()) << "Link source same as destination";
 
-  Device& src = FindDeviceOrDie(link->src_node()->id());
-  Device& dst = FindDeviceOrDie(link->dst_node()->id());
+  DeviceInterface& src = FindDeviceOrDie(link->src_node()->id());
+  DeviceInterface& dst = FindDeviceOrDie(link->dst_node()->id());
 
   Port* src_port = src.FindOrCreatePort(link->src_port());
   src_port->set_internal(internal);

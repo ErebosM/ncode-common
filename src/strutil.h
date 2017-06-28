@@ -623,10 +623,6 @@ struct AlphaNum {
   AlphaNum(uint64_t u64)
       : piece_data_(digits),
         piece_size_(FastUInt64ToBufferLeft(u64, digits) - &digits[0]) {}
-  AlphaNum(size_t st)
-      : piece_data_(digits),
-        piece_size_(FastUInt64ToBufferLeft(static_cast<uint64_t>(st), digits) -
-                    &digits[0]) {}
 
   AlphaNum(float f)
       : piece_data_(digits), piece_size_(strlen(FloatToBuffer(f, digits))) {}

@@ -3,19 +3,19 @@
 
 #include <map>
 
-#include "ncode_common/src/event_queue.h"
-#include "ncode_common/src/net/net_common.h"
+#include "../event_queue.h"
+#include "../net/net_common.h"
 
 namespace nc {
 namespace htsim {
 
 class FlowCounter {
  public:
-  FlowCounter(nc::EventQueue* event_queue)
+  FlowCounter(EventQueue* event_queue)
       : period_start_(event_queue->CurrentTime()), event_queue_(event_queue) {}
 
   // Adds a new packet. This assumes that now is
-  void NewPacket(const nc::net::FiveTuple& five_tuple);
+  void NewPacket(const net::FiveTuple& five_tuple);
 
   // Returns an estimate for the expected number of flows that the counter has
   // seen since the last call to EstimateCount. Same as calling
@@ -28,22 +28,24 @@ class FlowCounter {
 
   void Clear() { flows_.clear(); }
 
+  EventQueue* event_queue() { return event_queue_; }
+
  private:
   struct FirstAndLast {
-    FirstAndLast(nc::EventQueueTime first) : first(first), last(first) {}
+    FirstAndLast(EventQueueTime first) : first(first), last(first) {}
 
-    nc::EventQueueTime first;
-    nc::EventQueueTime last;
+    EventQueueTime first;
+    EventQueueTime last;
   };
 
   // Time the last call to EstimateCount occurred (or object construction).
-  nc::EventQueueTime period_start_;
+  EventQueueTime period_start_;
 
   // Records the timestamps of first and last packets seen from flows.
-  std::map<nc::net::FiveTuple, FirstAndLast> flows_;
+  std::map<net::FiveTuple, FirstAndLast> flows_;
 
   // The event queue -- used for getting timestamps.
-  nc::EventQueue* event_queue_;
+  EventQueue* event_queue_;
 };
 
 }  // namespace htsim

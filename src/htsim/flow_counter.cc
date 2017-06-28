@@ -7,8 +7,8 @@
 namespace nc {
 namespace htsim {
 
-void FlowCounter::NewPacket(const nc::net::FiveTuple& five_tuple) {
-  nc::EventQueueTime now = event_queue_->CurrentTime();
+void FlowCounter::NewPacket(const net::FiveTuple& five_tuple) {
+  EventQueueTime now = event_queue_->CurrentTime();
   auto it_and_rest = flows_.emplace(five_tuple, now);
   auto it = it_and_rest.first;
   FirstAndLast& first_and_last_timestamps = it->second;
@@ -22,13 +22,13 @@ double FlowCounter::EstimateCount() {
 }
 
 double FlowCounter::EstimateCountConst() const {
-  nc::EventQueueTime period_len = event_queue_->CurrentTime() - period_start_;
+  EventQueueTime period_len = event_queue_->CurrentTime() - period_start_;
   uint64_t period_len_millis = event_queue_->TimeToRawMillis(period_len);
 
-  nc::EventQueueTime total = nc::EventQueueTime::ZeroTime();
+  EventQueueTime total = EventQueueTime::ZeroTime();
   for (const auto& five_tuple_and_times : flows_) {
     const FirstAndLast& first_and_last_timestamp = five_tuple_and_times.second;
-    nc::EventQueueTime delta =
+    EventQueueTime delta =
         first_and_last_timestamp.last - first_and_last_timestamp.first;
     total += delta;
   }
