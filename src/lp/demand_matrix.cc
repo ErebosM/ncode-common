@@ -195,8 +195,9 @@ std::string DemandMatrix::ToString() const {
 
   std::string out;
   nc::StrAppend(
-      &out, nc::StrCat("TM with ", elements_.size(), " demands, scale factor ",
-                       MaxCommodityScaleFractor(), " sp link utilizations: ",
+      &out, nc::StrCat("TM with ", static_cast<uint64_t>(elements_.size()),
+                       " demands, scale factor ", MaxCommodityScaleFractor(),
+                       " sp link utilizations: ",
                        nc::Join(sp_utilizations, ","), "\n"));
 
   for (const auto& element : elements_) {
@@ -289,9 +290,10 @@ std::string DemandMatrix::ToRepetita(
     node_to_index_in_names[node] = index;
   }
 
-  std::string out = StrCat("DEMANDS ", elements_.size(), "\n");
+  std::string out =
+      StrCat("DEMANDS ", static_cast<uint64_t>(elements_.size()), "\n");
   StrAppend(&out, "label src dest bw\n");
-  for (size_t i = 0; i < elements_.size(); ++i) {
+  for (uint64_t i = 0; i < elements_.size(); ++i) {
     const DemandMatrixElement& element = elements_[i];
 
     StrAppend(&out,

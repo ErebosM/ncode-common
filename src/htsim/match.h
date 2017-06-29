@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <sstream>
 #include <vector>
+#include <random>
 
 #include "../net/net_common.h"
 #include "packet.h"
