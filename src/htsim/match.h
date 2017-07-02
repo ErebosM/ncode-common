@@ -175,10 +175,10 @@ class MatchRule {
   // Chooses an action from this rule's actions and updates the statistics. The
   // choice should be stable among 5-tuples and spread traffic among the actions
   // according to weight.
-  MatchRuleAction* ChooseOrNull(const Packet& packet);
+  const MatchRuleAction* ChooseOrNull(const Packet& packet);
 
-  // Like above, but only needs a 5-tuple and does not update the statistics.
-  MatchRuleAction* ChooseOrNull(const net::FiveTuple& five_tuple);
+  // Explicitly chooses the ith action from the rule.
+  const MatchRuleAction* ExplicitChooseOrDie(const Packet& packet, size_t i);
 
   // Returns the registered actions. The pointers owned by this object.
   std::vector<const MatchRuleAction*> actions() const;
@@ -203,6 +203,9 @@ class MatchRule {
   void MergeStats(const MatchRule& other_rule);
 
  private:
+  // Like above, but only needs a 5-tuple and does not update the statistics.
+  MatchRuleAction* ChooseOrNull(const net::FiveTuple& five_tuple);
+
   // Each match rule has a key.
   MatchRuleKey key_;
 
@@ -402,6 +405,10 @@ class SSCPStatsReply : public SSCPMessage {
   std::string ToString() const override;
 
   const std::map<MatchRuleKey, std::vector<ActionStats>>& stats() const {
+    return stats_;
+  }
+
+  std::map<MatchRuleKey, std::vector<ActionStats>>& stats_mutable() {
     return stats_;
   }
 

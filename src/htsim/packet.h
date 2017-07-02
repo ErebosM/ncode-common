@@ -46,7 +46,7 @@ class Packet {
   const net::FiveTuple& five_tuple() const { return five_tuple_; }
 
   // The size of the packet in bytes.
-  uint16_t size_bytes() const { return size_bytes_; }
+  uint32_t size_bytes() const { return size_bytes_; }
 
   // The IP id. Not guaranteed to be set.
   uint16_t ip_id() const { return ip_id_; }
@@ -101,11 +101,11 @@ class Packet {
   virtual std::string ToString() const = 0;
 
  protected:
-  Packet(const net::FiveTuple& five_tuple, uint16_t size_bytes,
+  Packet(const net::FiveTuple& five_tuple, uint32_t size_bytes,
          EventQueueTime time_sent);
 
   net::FiveTuple five_tuple_;
-  uint16_t size_bytes_;
+  uint32_t size_bytes_;
   uint16_t ip_id_;
   PacketTag tag_;
   uint8_t ttl_;
@@ -118,7 +118,7 @@ class Packet {
 // ACKs.
 class TCPPacket : public Packet {
  public:
-  TCPPacket(net::FiveTuple five_tuple, uint16_t size_bytes,
+  TCPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
             EventQueueTime time_sent, SeqNum sequence);
 
   // The sequence number.
@@ -148,7 +148,7 @@ class TCPPacket : public Packet {
 // A UDP packet.
 class UDPPacket : public Packet {
  public:
-  UDPPacket(net::FiveTuple five_tuple, uint16_t size_bytes,
+  UDPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
             EventQueueTime time_sent);
 
   PacketPtr Duplicate() const override;
@@ -293,6 +293,9 @@ class SSCPAddOrUpdate : public SSCPMessage {
   PacketPtr Duplicate() const override;
 
   const MatchRule& rule() const { return *(rule_.get()); }
+
+  // Ugly ...
+  MatchRule* MutableRule() const { return rule_.get(); }
 
   // Returns ownership of the rule.
   std::unique_ptr<MatchRule> TakeRule();

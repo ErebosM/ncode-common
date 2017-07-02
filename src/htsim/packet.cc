@@ -7,7 +7,7 @@
 namespace nc {
 namespace htsim {
 
-Packet::Packet(const net::FiveTuple& five_tuple, uint16_t size_bytes,
+Packet::Packet(const net::FiveTuple& five_tuple, uint32_t size_bytes,
                EventQueueTime time_sent)
     : five_tuple_(five_tuple),
       size_bytes_(size_bytes),
@@ -26,7 +26,7 @@ bool Packet::DecrementTTL() {
   return true;
 }
 
-TCPPacket::TCPPacket(net::FiveTuple five_tuple, uint16_t size_bytes,
+TCPPacket::TCPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
                      EventQueueTime time_sent, SeqNum sequence)
     : Packet(five_tuple, size_bytes, time_sent),
       sequence_(sequence),
@@ -51,7 +51,7 @@ std::string TCPPacket::ToString() const {
                     sequence_.Raw());
 }
 
-UDPPacket::UDPPacket(net::FiveTuple five_tuple, uint16_t size_bytes,
+UDPPacket::UDPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
                      EventQueueTime time_sent)
     : Packet(five_tuple, size_bytes, time_sent) {
   CHECK(size_bytes > 0) << "0-size UDP packet";

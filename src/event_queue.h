@@ -151,7 +151,7 @@ class EventQueue {
 
   // Public version of NanosToTime that takes in any std::chrono type.
   template <typename T>
-  EventQueueTime ToTime(T duration) {
+  EventQueueTime ToTime(T duration) const {
     using namespace std::chrono;
     nanoseconds nanos = duration_cast<nanoseconds>(duration);
     return NanosToTime(nanos);

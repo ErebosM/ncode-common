@@ -60,6 +60,7 @@ void Device::HandlePacket(PacketPtr pkt) {
           ip_address_, pkt->five_tuple().ip_src(), event_queue_->CurrentTime());
       matcher_.PopulateSSCPStats(stats_request_message->include_flow_counts(),
                                  reply.get());
+      PostProcessStats(*stats_request_message, reply.get());
 
       CHECK(replies_handler_)
           << "Received stats request, but no output handler";
@@ -255,6 +256,12 @@ void Device::HandlePacketFromPort(Port* input_port, PacketPtr pkt) {
     return;
   }
 
+  HandlePacketWithAction(input_port, std::move(pkt), action);
+}
+
+void Device::HandlePacketWithAction(Port* input_port, PacketPtr pkt,
+                                    const MatchRuleAction* action) {
+  CHECK(action != nullptr);
   if (action->tag() != kNullPacketTag) {
     pkt->set_tag(action->tag());
   }

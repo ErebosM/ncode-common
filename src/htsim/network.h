@@ -165,6 +165,15 @@ class Device : public DeviceInterface {
 
   void HandlePacketFromPort(Port* input_port, PacketPtr pkt) override;
 
+  void HandlePacketWithAction(Port* input_port, PacketPtr pkt,
+                              const MatchRuleAction* action);
+
+  virtual void PostProcessStats(const nc::htsim::SSCPStatsRequest& request,
+                                nc::htsim::SSCPStatsReply* reply) {
+    nc::Unused(request);
+    nc::Unused(reply);
+  }
+
   // Returns a pointer to the loopback port. Traffic sent to this port will end
   // up in the device's stack and all traffic destined for this device will be
   // delivered to the loopback port.
@@ -243,8 +252,6 @@ class Network : public SimComponent {
 
   // Network components
   std::map<std::string, DeviceInterface*> id_to_device_;
-  std::map<std::string, Queue*> queue_id_to_queue_;
-  std::map<std::string, Pipe*> pipe_id_to_pipe_;
 
   // All TCP connections in the network will share the same retx timer.
   std::unique_ptr<TCPRtxTimer> tcp_retx_timer_;

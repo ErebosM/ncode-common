@@ -144,12 +144,20 @@ std::vector<const MatchRuleAction*> MatchRule::actions() const {
   return return_vector;
 }
 
-MatchRuleAction* MatchRule::ChooseOrNull(const Packet& packet) {
+const MatchRuleAction* MatchRule::ChooseOrNull(const Packet& packet) {
   MatchRuleAction* action = ChooseOrNull(packet.five_tuple());
   if (action != nullptr) {
     action->UpdateStats(packet);
   }
 
+  return action;
+}
+
+const MatchRuleAction* MatchRule::ExplicitChooseOrDie(const Packet& packet,
+                                                      size_t i) {
+  CHECK(i < actions_.size());
+  MatchRuleAction* action = actions_[i].get();
+  action->UpdateStats(packet);
   return action;
 }
 
@@ -221,8 +229,9 @@ std::ostream& operator<<(std::ostream& output, const MatchRule& op) {
 
 Matcher::Matcher(const std::string& id) : id_(id) {}
 
-static MatchRuleAction* GetActionOrNull(const Packet& packet, MatchRule* rule) {
-  MatchRuleAction* action_chosen = rule->ChooseOrNull(packet);
+static const MatchRuleAction* GetActionOrNull(const Packet& packet,
+                                              MatchRule* rule) {
+  const MatchRuleAction* action_chosen = rule->ChooseOrNull(packet);
   if (action_chosen == nullptr) {
     return nullptr;
   }
