@@ -197,13 +197,13 @@ class DefaultObjectSizeAndWaitTimeGenerator
  public:
   DefaultObjectSizeAndWaitTimeGenerator(
       size_t mean_object_size_bytes, bool size_fixed,
-      std::chrono::milliseconds mean_wait_time_ms, bool wait_time_fixed,
+      std::chrono::milliseconds mean_wait_time, bool wait_time_fixed,
       double seed, EventQueue* event_queue);
 
   ObjectSizeAndWaitTime Next() override;
 
-  void set_constant_delay_ms(size_t constant_delay_ms) {
-    constant_delay_ms_ = constant_delay_ms;
+  void set_constant_delay(std::chrono::milliseconds constant_delay) {
+    constant_delay_ms_ = constant_delay.count();
   }
 
  private:
