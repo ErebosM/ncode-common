@@ -239,7 +239,9 @@ class Network : public SimComponent {
 
   // Adds a link (unidirectional). The link is a queue that is connected to a
   // pipe. The source / dst of the pipe should already be present.
-  void AddLink(Queue* queue, Pipe* pipe, bool internal = false);
+  void AddLink(Queue* queue, Pipe* pipe, const std::string& src,
+               const std::string& dst, nc::net::DevicePortNumber src_port,
+               nc::net::DevicePortNumber dst_port, bool internal = false);
 
   // Adds a TCP source to the common retx timer.
   void RegisterTCPSourceWithRetxTimer(TCPSource* src);

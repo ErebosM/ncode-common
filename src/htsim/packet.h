@@ -220,6 +220,8 @@ class Connection : public PacketHandler, public SimComponent {
     on_send_buffer_drained_ = on_send_buffer_drained;
   }
 
+  const net::FiveTuple& five_tuple() const { return five_tuple_; }
+
  protected:
   virtual void ReceivePacket(PacketPtr pkt) = 0;
 

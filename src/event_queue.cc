@@ -8,7 +8,8 @@ using namespace std::chrono;
 EventConsumer::~EventConsumer() {
   if (outstanding_event_count_ > 0) {
     LOG(INFO)
-        << "Tried to destroy EventCounsumer with " << outstanding_event_count_
+        << "Tried to destroy EventCounsumer (" << id() << ") with "
+        << outstanding_event_count_
         << " outstanding events. Will evict the consumer from the queue. Fix "
            "your code if this happens a lot.";
     parent_event_queue_->EvictConsumer(this);

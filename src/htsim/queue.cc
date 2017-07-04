@@ -22,7 +22,6 @@ static std::string GetQueueId(const std::string& src, const std::string& dst) {
 Pipe::Pipe(const net::GraphLink& edge, EventQueue* event_queue)
     : Pipe(edge.src_node()->id(), edge.dst_node()->id(),
            event_queue->ToTime(edge.delay()), event_queue) {
-  graph_link_ = &edge;
   other_end_ = nullptr;
 }
 
@@ -30,8 +29,7 @@ Pipe::Pipe(const std::string& src, const std::string& dst, EventQueueTime delay,
            EventQueue* event_queue)
     : EventConsumer(GetPipeId(src, dst), event_queue),
       delay_(delay),
-      other_end_(nullptr),
-      graph_link_(nullptr) {}
+      other_end_(nullptr) {}
 
 void Pipe::HandleEvent() {
   PacketPtr pkt = std::move(queue_.front().second);

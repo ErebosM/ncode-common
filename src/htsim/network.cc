@@ -91,7 +91,6 @@ void Device::HandlePacket(PacketPtr pkt) {
   } else if (ip_proto == net::kProtoTCP) {
     new_connection = make_unique<TCPSink>(sink_id, outgoing_tuple,
                                           loopback_port, event_queue_);
-    LOG(ERROR) << pkt->ToString();
     LOG(INFO) << "Added TCP sink at " << id() << " for " << outgoing_tuple;
   } else {
     LOG(FATAL) << "Don't know how to create new connection for IP proto "
@@ -316,17 +315,19 @@ void Network::AddDevice(DeviceInterface* device) {
   device->set_network(this);
 }
 
-void Network::AddLink(Queue* queue, Pipe* pipe, bool internal) {
-  const net::GraphLink* link = pipe->graph_link();
-  CHECK(link->src() != link->dst()) << "Link source same as destination";
+void Network::AddLink(Queue* queue, Pipe* pipe, const std::string& src_id,
+                      const std::string& dst_id,
+                      nc::net::DevicePortNumber src_port_num,
+                      nc::net::DevicePortNumber dst_port_num, bool internal) {
+  CHECK(src_id != dst_id) << "Link source same as destination";
 
-  DeviceInterface& src = FindDeviceOrDie(link->src_node()->id());
-  DeviceInterface& dst = FindDeviceOrDie(link->dst_node()->id());
+  DeviceInterface& src = FindDeviceOrDie(src_id);
+  DeviceInterface& dst = FindDeviceOrDie(dst_id);
 
-  Port* src_port = src.FindOrCreatePort(link->src_port());
+  Port* src_port = src.FindOrCreatePort(src_port_num);
   src_port->set_internal(internal);
 
-  Port* dst_port = dst.FindOrCreatePort(link->dst_port());
+  Port* dst_port = dst.FindOrCreatePort(dst_port_num);
   dst_port->set_internal(internal);
 
   // Connect the queue to the pipe and the source port to the queue
@@ -334,12 +335,10 @@ void Network::AddLink(Queue* queue, Pipe* pipe, bool internal) {
   queue->Connect(pipe);
   pipe->Connect(dst_port);
 
-  LOG(INFO) << Substitute("Added queue $0:$1 -> $2:$3.", link->src_node()->id(),
-                          link->src_port().Raw(), link->dst_node()->id(),
-                          link->dst_port().Raw());
-  LOG(INFO) << Substitute("Added pipe $0:$1 -> $2:$3.", link->src_node()->id(),
-                          link->src_port().Raw(), link->dst_node()->id(),
-                          link->dst_port().Raw());
+  LOG(INFO) << Substitute("Added queue $0:$1 -> $2:$3.", src_id,
+                          src_port_num.Raw(), dst_id, src_port_num.Raw());
+  LOG(INFO) << Substitute("Added pipe $0:$1 -> $2:$3.", src_id,
+                          src_port_num.Raw(), dst_id, src_port_num.Raw());
 }
 
 void Network::RegisterTCPSourceWithRetxTimer(TCPSource* src) {

@@ -43,11 +43,6 @@ class Pipe : public EventConsumer, public PacketHandler {
 
   const PipeStats& GetStats() const { return stats_; }
 
-  const net::GraphLink* graph_link() const {
-    CHECK(graph_link_ != nullptr);
-    return graph_link_;
-  }
-
  private:
   typedef std::pair<EventQueueTime, PacketPtr> ServiceTimeAndPacket;
 
@@ -59,9 +54,6 @@ class Pipe : public EventConsumer, public PacketHandler {
 
   // The packets in flight.
   std::deque<ServiceTimeAndPacket> queue_;
-
-  // The link this pipe is associated with.
-  const net::GraphLink* graph_link_;
 
   PipeStats stats_;
 

@@ -74,6 +74,8 @@ class FlowDriver {
     DEPENDENT
   };
 
+  virtual ~FlowDriver() {}
+
   FlowDriver(Type type) : type_(type) {}
 
   // Returns the type of the event.
