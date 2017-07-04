@@ -168,6 +168,9 @@ class EventQueue {
   // Stops execution.
   void Stop() { stop_time_ = CurrentTime(); }
 
+  // How far along the simulation is [0-1]
+  double Progress() { return CurrentTime() / stop_time_; }
+
   // A convenience method.
   template <typename T>
   void RunAndStopIn(T ms) {

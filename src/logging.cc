@@ -11,11 +11,11 @@ void DefaultLogHandler(LogLevel level, const char* filename, int line,
   // We use fprintf() instead of cerr because we want this to work at static
   // initialization time.
   if (color != LOGCOLOR_DEFAULT) {
-    fprintf(stderr, "%s[%s %s:%d] %s%s\n", color_prefixes[color],
+    fprintf(stderr, "\r%s[%s %s:%d] %s%s\n", color_prefixes[color],
             level_names[level], filename, line, message.c_str(),
             color_prefixes[LOGCOLOR_DEFAULT]);
   } else {
-    fprintf(stderr, "[%s %s:%d] %s\n", level_names[level], filename, line,
+    fprintf(stderr, "\r[%s %s:%d] %s\n", level_names[level], filename, line,
             message.c_str());
   }
   fflush(stderr);  // Needed on MSVC.

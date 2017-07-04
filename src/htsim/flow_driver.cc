@@ -91,12 +91,12 @@ FeedbackLoopFlowDriver::FeedbackLoopFlowDriver(
 }
 
 void FeedbackLoopFlowDriver::HandleEvent() {
-  uint64_t prev_data_to_add_ = data_to_add_;
+  uint64_t prev_data_to_add = data_to_add_;
   if (!data_to_add_) {
     ScheduleNext();
   }
 
-  if (prev_data_to_add_) {
+  if (prev_data_to_add) {
     connection_->OnSendBufferDrained([this] { ScheduleNext(); });
     connection_->AddData(data_to_add_);
   }
@@ -107,6 +107,33 @@ void FeedbackLoopFlowDriver::ConnectionAttached(Connection* connection) {
 }
 
 void FeedbackLoopFlowDriver::ScheduleNext() {
+  ObjectSizeAndWaitTime next = generator_->Next();
+  data_to_add_ = next.object_size;
+  EnqueueIn(next.wait_time);
+}
+
+OpenLoopFlowDriver::OpenLoopFlowDriver(
+    const std::string& id,
+    std::unique_ptr<ObjectSizeAndWaitTimeGenerator> generator,
+    EventQueue* event_queue)
+    : EventConsumer(id, event_queue),
+      generator_(std::move(generator)),
+      data_to_add_(0),
+      connection_(nullptr) {
+  ScheduleNext();
+}
+
+void OpenLoopFlowDriver::HandleEvent() {
+  connection_->OnSendBufferDrained([] {});
+  connection_->AddData(data_to_add_);
+  ScheduleNext();
+}
+
+void OpenLoopFlowDriver::ConnectionAttached(Connection* connection) {
+  connection_ = connection;
+}
+
+void OpenLoopFlowDriver::ScheduleNext() {
   ObjectSizeAndWaitTime next = generator_->Next();
   data_to_add_ = next.object_size;
   EnqueueIn(next.wait_time);

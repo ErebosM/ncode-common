@@ -252,6 +252,33 @@ class FeedbackLoopFlowDriver : public ConnectionDependentFlowDriver,
   Connection* connection_;
 };
 
+// A flow driver that will add data to a connection, wait an amount of time
+// after the connection's send buffer has been drained and then add more data.
+class OpenLoopFlowDriver : public ConnectionDependentFlowDriver,
+                           public EventConsumer {
+ public:
+  // Will get the object sizes and wait times from a vector.
+  OpenLoopFlowDriver(const std::string& id,
+                     std::unique_ptr<ObjectSizeAndWaitTimeGenerator> generator,
+                     EventQueue* event_queue);
+
+  void HandleEvent() override;
+
+  void ConnectionAttached(Connection* connection) override;
+
+ private:
+  void ScheduleNext();
+
+  // This object owns the generator.
+  std::unique_ptr<ObjectSizeAndWaitTimeGenerator> generator_;
+
+  // Bytes of data to add on the next HandleEvent call.
+  uint64_t data_to_add_;
+
+  // The connection that this driver adds to.
+  Connection* connection_;
+};
+
 // A flow pack is a collection of connections managed by their drivers.
 class FlowPack : public EventConsumer {
  public:
