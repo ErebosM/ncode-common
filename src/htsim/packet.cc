@@ -35,8 +35,8 @@ TCPPacket::TCPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
 }
 
 PacketPtr TCPPacket::Duplicate() const {
-  auto new_pkt =
-      make_unique<TCPPacket>(five_tuple_, size_bytes_, time_sent_, sequence_);
+  auto new_pkt = GetFreeList<TCPPacket>().New(five_tuple_, size_bytes_,
+                                              time_sent_, sequence_);
   new_pkt->ip_id_ = ip_id_;
   new_pkt->tag_ = tag_;
   new_pkt->ttl_ = ttl_;
@@ -58,7 +58,8 @@ UDPPacket::UDPPacket(net::FiveTuple five_tuple, uint32_t size_bytes,
 }
 
 PacketPtr UDPPacket::Duplicate() const {
-  auto new_pkt = make_unique<UDPPacket>(five_tuple_, size_bytes_, time_sent_);
+  auto new_pkt =
+      GetFreeList<UDPPacket>().New(five_tuple_, size_bytes_, time_sent_);
   new_pkt->ip_id_ = ip_id_;
   new_pkt->tag_ = tag_;
   new_pkt->ttl_ = ttl_;
@@ -107,7 +108,7 @@ SSCPAddOrUpdate::SSCPAddOrUpdate(net::IPAddress ip_src, net::IPAddress ip_dst,
 
 PacketPtr SSCPAddOrUpdate::Duplicate() const {
   auto rule = rule_->Clone();
-  auto new_msg = make_unique<SSCPAddOrUpdate>(
+  auto new_msg = GetFreeList<SSCPAddOrUpdate>().New(
       five_tuple_.ip_src(), five_tuple_.ip_dst(), time_sent_, std::move(rule));
   new_msg->set_tx_id(tx_id());
   return std::move(new_msg);
@@ -134,7 +135,7 @@ SSCPAck::SSCPAck(net::IPAddress ip_src, net::IPAddress ip_dst,
 }
 
 PacketPtr SSCPAck::Duplicate() const {
-  auto new_msg = make_unique<SSCPAck>(
+  auto new_msg = GetFreeList<SSCPAck>().New(
       five_tuple_.ip_src(), five_tuple_.ip_dst(), time_sent_, tx_id());
   return std::move(new_msg);
 }

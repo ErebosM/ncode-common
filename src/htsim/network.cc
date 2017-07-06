@@ -45,7 +45,7 @@ void Device::HandlePacket(PacketPtr pkt) {
 
       if (add_or_update_message->tx_id() != SSCPMessage::kNoTxId &&
           replies_handler_ != nullptr) {
-        auto reply = make_unique<SSCPAck>(
+        auto reply = GetFreeList<SSCPAck>().New(
             ip_address_, pkt->five_tuple().ip_src(),
             event_queue_->CurrentTime(), add_or_update_message->tx_id());
 
@@ -56,7 +56,7 @@ void Device::HandlePacket(PacketPtr pkt) {
       SSCPStatsRequest* stats_request_message =
           static_cast<SSCPStatsRequest*>(pkt.get());
 
-      auto reply = make_unique<SSCPStatsReply>(
+      auto reply = GetFreeList<SSCPStatsReply>().New(
           ip_address_, pkt->five_tuple().ip_src(), event_queue_->CurrentTime());
       matcher_.PopulateSSCPStats(stats_request_message->include_flow_counts(),
                                  reply.get());

@@ -47,7 +47,7 @@ void PcapPacketGen::HandleTCP(pcap::Timestamp timestamp,
   }
 
   SeqNum seq_num(ntohl(tcp_header.th_seq));
-  auto packet = make_unique<TCPPacket>(five_tuple, size, time, seq_num);
+  auto packet = GetFreeList<TCPPacket>().New(five_tuple, size, time, seq_num);
   packet->set_id(ntohs(ip_header.ip_id));
   packet->set_flags(tcp_header.th_flags);
   packet->set_payload(payload_len);
@@ -76,7 +76,7 @@ void PcapPacketGen::HandleUDP(pcap::Timestamp timestamp,
     return;
   }
 
-  auto packet = make_unique<UDPPacket>(five_tuple, size, time);
+  auto packet = GetFreeList<UDPPacket>().New(five_tuple, size, time);
   packet->set_id(ntohs(ip_header.ip_id));
   packet->set_payload(payload_len);
   packet->set_ttl(overwrite_ttl_ ? kDefaultTTL : ip_header.ip_ttl);

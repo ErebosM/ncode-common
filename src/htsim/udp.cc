@@ -16,8 +16,8 @@ UDPSink::UDPSink(const std::string& id, const net::FiveTuple& five_tuple,
     : Connection(id, five_tuple, out_handler, event_queue) {}
 
 void UDPSource::AddData(uint64_t pkt_size) {
-  auto pkt_ptr = make_unique<UDPPacket>(five_tuple_, pkt_size,
-                                        event_queue_->CurrentTime());
+  auto pkt_ptr = GetFreeList<UDPPacket>().New(five_tuple_, pkt_size,
+                                              event_queue_->CurrentTime());
   SendPacket(std::move(pkt_ptr));
 }
 

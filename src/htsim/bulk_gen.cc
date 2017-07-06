@@ -174,7 +174,7 @@ htsim::PacketPtr ExpPacketSource::NextPacket() {
       event_queue_->ToTime(std::chrono::nanoseconds(delta_nanos));
 
   time_ += delta;
-  return make_unique<htsim::UDPPacket>(five_tuple_, pkt_size_, time_);
+  return GetFreeList<UDPPacket>().New(five_tuple_, pkt_size_, time_);
 }
 
 ConstantPacketSource::ConstantPacketSource(
@@ -189,7 +189,7 @@ ConstantPacketSource::ConstantPacketSource(
 
 PacketPtr ConstantPacketSource::NextPacket() {
   time_ += gap_;
-  return make_unique<htsim::UDPPacket>(five_tuple_, pkt_size_, time_);
+  return GetFreeList<UDPPacket>().New(five_tuple_, pkt_size_, time_);
 }
 
 SpikyPacketSource::SpikyPacketSource(
@@ -222,7 +222,7 @@ PacketPtr SpikyPacketSource::NextPacket() {
     return NextPacket();
   }
 
-  return make_unique<htsim::UDPPacket>(
+  return GetFreeList<UDPPacket>().New(
       five_tuple_, pkt_size_, event_queue_->ToTime(spike.at) + time_into_spike);
 }
 

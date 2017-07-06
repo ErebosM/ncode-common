@@ -381,9 +381,9 @@ SSCPStatsRequest::SSCPStatsRequest(net::IPAddress ip_src, net::IPAddress ip_dst,
       include_flow_counts_(include_flow_counts) {}
 
 PacketPtr SSCPStatsRequest::Duplicate() const {
-  auto new_msg =
-      make_unique<SSCPStatsRequest>(five_tuple_.ip_src(), five_tuple_.ip_dst(),
-                                    time_sent_, include_flow_counts_);
+  auto new_msg = GetFreeList<SSCPStatsRequest>().New(
+      five_tuple_.ip_src(), five_tuple_.ip_dst(), time_sent_,
+      include_flow_counts_);
   return std::move(new_msg);
 }
 
@@ -399,8 +399,8 @@ SSCPStatsReply::SSCPStatsReply(net::IPAddress ip_src, net::IPAddress ip_dst,
     : SSCPMessage(ip_src, ip_dst, kSSCPStatsReplyType, time_sent) {}
 
 PacketPtr SSCPStatsReply::Duplicate() const {
-  auto new_msg = make_unique<SSCPStatsReply>(five_tuple_.ip_src(),
-                                             five_tuple_.ip_dst(), time_sent_);
+  auto new_msg = GetFreeList<SSCPStatsReply>().New(
+      five_tuple_.ip_src(), five_tuple_.ip_dst(), time_sent_);
   new_msg->stats_ = stats_;
   return std::move(new_msg);
 }

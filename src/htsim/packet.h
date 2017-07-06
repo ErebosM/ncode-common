@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../common.h"
+#include "../free_list.h"
 #include "../event_queue.h"
 #include "../net/net_common.h"
 #include "../net/pcap.h"
@@ -35,7 +36,7 @@ static constexpr uint8_t kDefaultTTL = 100;
 class Packet;
 
 // All packets have this pointer type.
-using PacketPtr = std::unique_ptr<Packet>;
+using PacketPtr = FreeList<Packet>::Pointer;
 
 // A generic packet in the simulation.
 class Packet {

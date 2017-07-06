@@ -303,8 +303,8 @@ void TCPSource::RtxTimerHook(EventQueueTime now) {
 
 void TCPSource::RetransmitPacket() {
   EventQueueTime now = event_queue_->CurrentTime();
-  auto pkt_ptr =
-      make_unique<TCPPacket>(five_tuple_, mss_, now, SeqNum(last_acked_ + 1));
+  auto pkt_ptr = GetFreeList<TCPPacket>().New(five_tuple_, mss_, now,
+                                              SeqNum(last_acked_ + 1));
 
   last_sent_time_ = now;
   SendPacket(std::move(pkt_ptr));
@@ -330,8 +330,8 @@ void TCPSource::SendPackets() {
     }
 
     size_t to_tx = std::min(static_cast<uint64_t>(mss_), send_buffer_);
-    auto pkt_ptr = make_unique<TCPPacket>(five_tuple_, to_tx, now,
-                                          SeqNum(highest_seqno_sent_ + 1));
+    auto pkt_ptr = GetFreeList<TCPPacket>().New(
+        five_tuple_, to_tx, now, SeqNum(highest_seqno_sent_ + 1));
 
     send_buffer_ -= to_tx;
     highest_seqno_sent_ += to_tx;  // XX beware wrapping
@@ -440,8 +440,8 @@ void TCPSink::ReceivePacket(PacketPtr pkt) {
 }
 
 void TCPSink::SendAck(EventQueueTime time_sent) {
-  auto pkt_ptr = make_unique<TCPPacket>(five_tuple_, kAckSize, time_sent,
-                                        SeqNum(cumulative_ack_));
+  auto pkt_ptr = GetFreeList<TCPPacket>().New(five_tuple_, kAckSize, time_sent,
+                                              SeqNum(cumulative_ack_));
   SendPacket(std::move(pkt_ptr));
 }
 
