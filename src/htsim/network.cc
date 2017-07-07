@@ -126,14 +126,14 @@ net::FiveTuple Device::PrepareTuple(net::IPAddress dst_address,
   return tuple;
 }
 
-TCPSource* Device::AddTCPGenerator(net::IPAddress dst_address,
-                                   net::AccessLayerPort dst_port, uint16_t mss,
-                                   uint32_t maxcwnd) {
+TCPSource* Device::AddTCPGenerator(const TCPSourceConfig& tcp_config,
+                                   net::IPAddress dst_address,
+                                   net::AccessLayerPort dst_port) {
   net::FiveTuple tuple = PrepareTuple(dst_address, dst_port, true);
   Port* loopback_port = GetLoopbackPort();
   std::string gen_id = GetGeneratorId(tuple);
 
-  auto new_connection = make_unique<TCPSource>(gen_id, tuple, mss, maxcwnd,
+  auto new_connection = make_unique<TCPSource>(gen_id, tuple, tcp_config,
                                                loopback_port, event_queue_);
 
   CHECK(network_ != nullptr) << "Device not part of a network";

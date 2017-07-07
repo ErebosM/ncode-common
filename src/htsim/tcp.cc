@@ -19,12 +19,13 @@ using namespace std::chrono;
 static constexpr size_t kAckSize = 40;
 
 TCPSource::TCPSource(const std::string& id, const net::FiveTuple& five_tuple,
-                     uint16_t mss, uint32_t maxcwnd, PacketHandler* out,
+                     const TCPSourceConfig& tcp_config, PacketHandler* out,
                      EventQueue* event_queue)
     : Connection(id, five_tuple, out, event_queue),
-      mss_(mss),
-      maxcwnd_(maxcwnd),
-      close_count_(0) {
+      mss_(tcp_config.mss),
+      maxcwnd_(tcp_config.maxcwnd),
+      close_count_(0),
+      initial_cwnd_size_(tcp_config.inital_cwnd_size) {
   Close();
 }
 
@@ -352,7 +353,7 @@ void TCPSource::AddData(uint64_t bytes) {
   // If the flow does not have any outstanding data its congestion window will
   // be 0 (set by Close()). In that case we will set it to its initial value.
   if (cwnd_ == 0) {
-    cwnd_ = kInitialCWNDMultiplier * mss_;
+    cwnd_ = initial_cwnd_size_ * mss_;
   }
 
   if (send_buffer_ + bytes < send_buffer_) {

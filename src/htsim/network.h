@@ -180,9 +180,9 @@ class Device : public DeviceInterface {
   Port* GetLoopbackPort() { return FindOrCreatePort(kLoopbackPortNum); }
 
   // Constructs a new TCP source and returns a non-owning pointer to it.
-  TCPSource* AddTCPGenerator(net::IPAddress dst_address,
-                             net::AccessLayerPort dst_port, uint16_t mss,
-                             uint32_t maxcwnd);
+  TCPSource* AddTCPGenerator(const TCPSourceConfig& tcp_config,
+                             net::IPAddress dst_address,
+                             net::AccessLayerPort dst_port);
 
   // Constructs a new UDP source and returns a non-owning pointer to it.
   UDPSource* AddUDPGenerator(net::IPAddress dst_address,

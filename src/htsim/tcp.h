@@ -15,13 +15,22 @@
 namespace nc {
 namespace htsim {
 
+// Configuration of a TCPSource.
+struct TCPSourceConfig {
+  // Maximum segment size.
+  uint16_t mss = 1500;
+
+  // Maximum congestion window.
+  uint32_t maxcwnd = 2000000;
+
+  // How many packets to initially open the congestion window to.
+  uint32_t inital_cwnd_size = 4;
+};
+
 class TCPSource : public Connection {
  public:
-  // How many packets to initially open the congestion window to.
-  static constexpr size_t kInitialCWNDMultiplier = 4;
-
   TCPSource(const std::string& id, const net::FiveTuple& five_tuple,
-            uint16_t mss, uint32_t maxcwnd, PacketHandler* out,
+            const TCPSourceConfig& tcp_source_config, PacketHandler* out,
             EventQueue* event_queue);
 
   void ReceivePacket(PacketPtr pkt) override;
@@ -94,6 +103,9 @@ class TCPSource : public Connection {
 
   // Number of times Close() has been called.
   uint64_t close_count_;
+
+  // Size (in pkts) of the initial congestion window.
+  uint32_t initial_cwnd_size_;
 
   DISALLOW_COPY_AND_ASSIGN(TCPSource);
 };
