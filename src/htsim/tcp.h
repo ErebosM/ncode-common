@@ -33,7 +33,7 @@ class TCPSource : public Connection {
   void RtxTimerHook(EventQueueTime now);
 
   void set_complection_times_callback(
-      std::function<void(EventQueueTime)> complectionTimesCallback) {
+      std::function<void(EventQueueTime, uint64_t)> complectionTimesCallback) {
     complection_times_callback_ = complectionTimesCallback;
   }
 
@@ -87,10 +87,13 @@ class TCPSource : public Connection {
   std::function<void(uint64_t)> retx_timeout_callback_;
 
   // Completion times for each flow.
-  std::function<void(EventQueueTime)> complection_times_callback_;
+  std::function<void(EventQueueTime, uint64_t)> complection_times_callback_;
 
   // Time the first packet in the flow is sent.
   EventQueueTime first_sent_time_;
+
+  // Number of times Close() has been called.
+  uint64_t close_count_;
 
   DISALLOW_COPY_AND_ASSIGN(TCPSource);
 };

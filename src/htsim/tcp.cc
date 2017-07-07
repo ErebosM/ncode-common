@@ -23,7 +23,8 @@ TCPSource::TCPSource(const std::string& id, const net::FiveTuple& five_tuple,
                      EventQueue* event_queue)
     : Connection(id, five_tuple, out, event_queue),
       mss_(mss),
-      maxcwnd_(maxcwnd) {
+      maxcwnd_(maxcwnd),
+      close_count_(0) {
   Close();
 }
 
@@ -45,13 +46,14 @@ void TCPSource::Close() {
   in_fast_recovery_ = false;
   send_buffer_ = 0;
   rto_ = event_queue_->ToTime(seconds(1)).Raw();
+  ++close_count_;
 }
 
 void TCPSource::UpdateCompletionTime() {
   EventQueueTime completion_time =
       event_queue_->CurrentTime() - first_sent_time_;
   if (complection_times_callback_) {
-    complection_times_callback_(completion_time);
+    complection_times_callback_(completion_time, close_count_);
   }
 }
 
