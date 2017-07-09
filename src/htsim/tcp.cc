@@ -25,7 +25,10 @@ TCPSource::TCPSource(const std::string& id, const net::FiveTuple& five_tuple,
       mss_(tcp_config.mss),
       maxcwnd_(tcp_config.maxcwnd),
       close_count_(0),
-      initial_cwnd_size_(tcp_config.inital_cwnd_size) {
+      initial_cwnd_size_(tcp_config.inital_cwnd_size),
+      simulate_initial_handshake_(tcp_config.simulate_initial_handshake),
+      pending_add_(0),
+      original_first_sent_time_(EventQueueTime::MaxTime()) {
   Close();
 }
 
@@ -50,12 +53,33 @@ void TCPSource::Close() {
   ++close_count_;
 }
 
-void TCPSource::UpdateCompletionTime() {
-  EventQueueTime completion_time =
-      event_queue_->CurrentTime() - first_sent_time_;
+void TCPSource::DataTransferred() {
+  // Check to see if this is the end of the initial 1-byte transfer that
+  // simulates a handshake.
+  if (simulate_initial_handshake_ && pending_add_ != 0) {
+    original_first_sent_time_ = first_sent_time_;
+
+    AddData(pending_add_);
+    pending_add_ = 0;
+    return;
+  }
+
+  if (!on_send_buffer_drained_) {
+    return;
+  }
+
   if (complection_times_callback_) {
+    EventQueueTime completion_time;
+    if (simulate_initial_handshake_) {
+      completion_time = event_queue_->CurrentTime() - original_first_sent_time_;
+    } else {
+      completion_time = event_queue_->CurrentTime() - first_sent_time_;
+    }
+
     complection_times_callback_(completion_time, close_count_);
   }
+  on_send_buffer_drained_();
+  on_send_buffer_drained_ = nullptr;
 }
 
 void TCPSource::ReceivePacket(PacketPtr pkt) {
@@ -257,12 +281,7 @@ void TCPSource::RtxTimerHook(EventQueueTime now) {
   }
 
   if (last_acked_ >= highest_seqno_sent_real_) {
-    if (on_send_buffer_drained_) {
-      UpdateCompletionTime();
-      on_send_buffer_drained_();
-      on_send_buffer_drained_ = nullptr;
-    }
-
+    DataTransferred();
     return;
   }
 
@@ -270,11 +289,10 @@ void TCPSource::RtxTimerHook(EventQueueTime now) {
     return;
   }
 
-  //  LOG(ERROR) << "Retx timeout last sent "
-  //             << event_queue_->TimeToRawMillis(last_sent_time_) << " rto "
-  //             << event_queue_->TimeToRawMillis(
-  //                    ncode::common::EventQueueTime(rto_))
-  //             << " at " << id();
+  LOG(FATAL) << "Retx timeout last sent "
+             << event_queue_->TimeToRawMillis(last_sent_time_) << " rto "
+             << event_queue_->TimeToRawMillis(EventQueueTime(rto_)) << " at "
+             << id();
 
   if (in_fast_recovery_) {
     uint32_t flightsize = highest_seqno_sent_ - last_acked_;
@@ -314,11 +332,8 @@ void TCPSource::RetransmitPacket() {
 }
 
 void TCPSource::SendPackets() {
-  if (last_acked_ >= highest_seqno_sent_real_ && send_buffer_ == 0 &&
-      on_send_buffer_drained_) {
-    UpdateCompletionTime();
-    on_send_buffer_drained_();
-    on_send_buffer_drained_ = nullptr;
+  if (last_acked_ >= highest_seqno_sent_real_ && send_buffer_ == 0) {
+    DataTransferred();
     return;
   }
 
@@ -354,6 +369,11 @@ void TCPSource::AddData(uint64_t bytes) {
   // be 0 (set by Close()). In that case we will set it to its initial value.
   if (cwnd_ == 0) {
     cwnd_ = initial_cwnd_size_ * mss_;
+
+    if (simulate_initial_handshake_ && pending_add_ == 0) {
+      pending_add_ = bytes;
+      bytes = 1;
+    }
   }
 
   if (send_buffer_ + bytes < send_buffer_) {

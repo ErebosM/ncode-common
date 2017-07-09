@@ -25,6 +25,9 @@ struct TCPSourceConfig {
 
   // How many packets to initially open the congestion window to.
   uint32_t inital_cwnd_size = 4;
+
+  // Whether or not to simulate an initial handshake.
+  bool simulate_initial_handshake = false;
 };
 
 class TCPSource : public Connection {
@@ -56,7 +59,7 @@ class TCPSource : public Connection {
   }
 
  private:
-  void UpdateCompletionTime();
+  void DataTransferred();
 
   void InflateWindow();
 
@@ -106,6 +109,19 @@ class TCPSource : public Connection {
 
   // Size (in pkts) of the initial congestion window.
   uint32_t initial_cwnd_size_;
+
+  // Whether to simulate a 1 RTT initial handshake or not.
+  bool simulate_initial_handshake_;
+
+  // If an initial handshake is to be simulated when data is added it is kept
+  // here and the actual transfer is preceded by a fake 1-byte transfer to
+  // account for the handshake.
+  uint64_t pending_add_;
+
+  // If simulate_initial_handshake_ is true this stores first_sent_time_ from
+  // the 1-byte initial transfer, which will be overwritten by the second
+  // transfer.
+  EventQueueTime original_first_sent_time_;
 
   DISALLOW_COPY_AND_ASSIGN(TCPSource);
 };
