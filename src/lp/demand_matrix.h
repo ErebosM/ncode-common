@@ -154,11 +154,12 @@ class DemandGenerator {
   void AddOutgoingFractionConstraint(double fraction, double out_fraction);
 
   // Generates a matrix. Will generate num_tries matrices and pick the one with
-  // the highest global utilization. The matrix will be scaled by the scale
+  // the highest cost. The matrix will be scaled by the scale
   // argument after generation (but this function guarantees that it will return
   // a feasible matrix).
-  std::unique_ptr<DemandMatrix> GenerateMatrix(size_t num_tries,
-                                               double scale = 1.0);
+  std::unique_ptr<DemandMatrix> GenerateMatrix(
+      size_t num_tries, double scale,
+      std::function<double(const DemandMatrix&)> cost_function);
 
  private:
   // Called by GenerateMatrix to generate a single matrix, if the matrix does

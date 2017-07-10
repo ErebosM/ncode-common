@@ -364,9 +364,10 @@ static void AddLocalityConstraint(
   }
 }
 
-std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(size_t tries,
-                                                              double scale) {
-  double max_gu = 0;
+std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(
+    size_t tries, double scale,
+    std::function<double(const DemandMatrix&)> cost_function) {
+  double max_cost = 0;
   double sf = 0;
   std::unique_ptr<DemandMatrix> best_matrix;
   for (size_t i = 0; i < tries; ++i) {
@@ -395,16 +396,15 @@ std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(size_t tries,
       continue;
     }
 
-    double global_utilization = matrix->SPGlobalUtilization();
-    if (global_utilization > max_gu) {
-      max_gu = global_utilization;
+    double cost = cost_function(*matrix);
+    if (cost > max_cost) {
+      max_cost = cost;
       sf = scale_factor;
       best_matrix = std::move(matrix);
     }
   }
 
-  LOG(INFO) << "Picked matrix with global utilization " << max_gu
-            << " scale factor " << sf;
+  LOG(INFO) << "Picked matrix with cost " << max_cost << " scale factor " << sf;
   return best_matrix;
 }
 
