@@ -353,6 +353,9 @@ class GraphBuilder {
   // Scales the capacity of all links by a fraction.
   void ScaleCapacity(double fraction);
 
+  // Scales the delay of all links by a fraction.
+  void ScaleDelay(double fraction);
+
  private:
   // If true port numbers will be auto-assigned.
   bool auto_port_numbers_;

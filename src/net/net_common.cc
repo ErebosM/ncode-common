@@ -704,9 +704,22 @@ void GraphBuilder::RemoveMultipleLinks() {
 void GraphBuilder::ScaleCapacity(double fraction) {
   std::vector<GraphLinkBase> new_links;
   for (const auto& link : links_) {
+    net::Bandwidth new_bw = std::max(net::Bandwidth::FromBitsPerSecond(1),
+                                     link.bandwidth() * fraction);
     new_links.emplace_back(link.src_id(), link.dst_id(), link.src_port(),
-                           link.dst_port(), link.bandwidth() * fraction,
-                           link.delay());
+                           link.dst_port(), new_bw, link.delay());
+  }
+  std::swap(links_, new_links);
+}
+
+void GraphBuilder::ScaleDelay(double fraction) {
+  std::vector<GraphLinkBase> new_links;
+  for (const auto& link : links_) {
+    net::Delay new_delay = std::max(
+        net::Delay(1),
+        net::Delay(static_cast<uint64_t>(link.delay().count() * fraction)));
+    new_links.emplace_back(link.src_id(), link.dst_id(), link.src_port(),
+                           link.dst_port(), link.bandwidth(), new_delay);
   }
   std::swap(links_, new_links);
 }
