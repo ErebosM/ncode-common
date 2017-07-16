@@ -289,10 +289,10 @@ void TCPSource::RtxTimerHook(EventQueueTime now) {
     return;
   }
 
-  LOG(FATAL) << "Retx timeout last sent "
-             << event_queue_->TimeToRawMillis(last_sent_time_) << " rto "
-             << event_queue_->TimeToRawMillis(EventQueueTime(rto_)) << " at "
-             << id();
+//  LOG(FATAL) << "Retx timeout last sent "
+//             << event_queue_->TimeToRawMillis(last_sent_time_) << " rto "
+//             << event_queue_->TimeToRawMillis(EventQueueTime(rto_)) << " at "
+//             << id();
 
   if (in_fast_recovery_) {
     uint32_t flightsize = highest_seqno_sent_ - last_acked_;

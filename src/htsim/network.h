@@ -95,7 +95,9 @@ class DeviceInterface : public SimComponent, public PacketHandler {
       : SimComponent(id, event_queue),
         ip_address_(ip_address),
         network_(nullptr),
-        replies_handler_(nullptr) {}
+        replies_handler_(nullptr),
+        internal_external_observer_(nullptr),
+        external_internal_observer_(nullptr) {}
 
   virtual ~DeviceInterface() {}
 
@@ -123,6 +125,11 @@ class DeviceInterface : public SimComponent, public PacketHandler {
   // Returns this device's ip address.
   net::IPAddress ip_address() const { return ip_address_; }
 
+  // Adds observers that will observe packets that are transfered to/from
+  // internal/external ports.
+  void AddInternalExternalObserver(PacketObserver* observer);
+  void AddExternalInternalObserver(PacketObserver* observer);
+
  protected:
   // This device's address.
   net::IPAddress ip_address_;
@@ -137,6 +144,14 @@ class DeviceInterface : public SimComponent, public PacketHandler {
   // of using the routing table to find a destination etc.). If this is  nullptr
   // no replies are sent.
   PacketHandler* replies_handler_;
+
+  // All packets that move from internal to external ports are observed by this
+  // observer (if not null).
+  PacketObserver* internal_external_observer_;
+
+  // All packets that move from external to internal ports are observed by this
+  // observer (if not null).
+  PacketObserver* external_internal_observer_;
 };
 
 // A device in the network. Each device can perform forwarding based on a set of
@@ -188,11 +203,6 @@ class Device : public DeviceInterface {
   UDPSource* AddUDPGenerator(net::IPAddress dst_address,
                              net::AccessLayerPort dst_port);
 
-  // Adds observers that will observe packets that are transfered to/from
-  // internal/external ports.
-  void AddInternalExternalObserver(PacketObserver* observer);
-  void AddExternalInternalObserver(PacketObserver* observer);
-
   void set_die_on_fail_to_match(bool die_on_fail_to_match) {
     die_on_fail_to_match_ = die_on_fail_to_match;
   }
@@ -215,14 +225,6 @@ class Device : public DeviceInterface {
   // packets.
   std::unordered_map<net::FiveTuple, std::unique_ptr<Connection>,
                      net::FiveTupleHasher> connections_;
-
-  // All packets that move from internal to external ports are observed by this
-  // observer (if not null).
-  PacketObserver* internal_external_observer_;
-
-  // All packets that move from external to internal ports are observed by this
-  // observer (if not null).
-  PacketObserver* external_internal_observer_;
 
   // Dies if a packet fails to match an entry in the routing table.
   bool die_on_fail_to_match_;
@@ -259,6 +261,22 @@ class Network : public SimComponent {
   std::unique_ptr<TCPRtxTimer> tcp_retx_timer_;
 
   DISALLOW_COPY_AND_ASSIGN(Network);
+};
+
+// Displays the simulation's progress periodically.
+class ProgressIndicator : public nc::EventConsumer {
+ public:
+  ProgressIndicator(std::chrono::milliseconds update_period,
+                    nc::EventQueue* event_queue);
+
+  void HandleEvent() override;
+
+ private:
+  // How often (in simulated time) to update the indicator.
+  nc::EventQueueTime period_;
+
+  // The initial time.
+  std::chrono::milliseconds init_real_time_;
 };
 
 }  // namespace htsim

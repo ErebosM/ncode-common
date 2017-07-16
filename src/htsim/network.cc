@@ -1,6 +1,7 @@
 #include "network.h"
 
 #include <chrono>
+#include <iomanip>
 #include <limits>
 #include <utility>
 
@@ -164,8 +165,6 @@ Device::Device(const std::string& id, net::IPAddress ip_address,
                EventQueue* event_queue)
     : DeviceInterface(id, ip_address, event_queue),
       matcher_("matcher_for_" + id),
-      internal_external_observer_(nullptr),
-      external_internal_observer_(nullptr),
       die_on_fail_to_match_(false) {}
 
 Port::Port(net::DevicePortNumber number, DeviceInterface* device)
@@ -290,14 +289,14 @@ void Device::HandlePacketWithAction(Port* input_port, PacketPtr pkt,
   output_port->SendPacketOut(std::move(pkt));
 }
 
-void Device::AddInternalExternalObserver(PacketObserver* observer) {
+void DeviceInterface::AddInternalExternalObserver(PacketObserver* observer) {
   CHECK(internal_external_observer_ == nullptr ||
         internal_external_observer_ == observer);
   CHECK(observer != nullptr);
   internal_external_observer_ = observer;
 }
 
-void Device::AddExternalInternalObserver(PacketObserver* observer) {
+void DeviceInterface::AddExternalInternalObserver(PacketObserver* observer) {
   CHECK(external_internal_observer_ == nullptr ||
         external_internal_observer_ == observer);
   CHECK(observer != nullptr);
@@ -343,6 +342,76 @@ void Network::AddLink(Queue* queue, Pipe* pipe, const std::string& src_id,
 
 void Network::RegisterTCPSourceWithRetxTimer(TCPSource* src) {
   tcp_retx_timer_->RegisterTCPSource(src);
+}
+
+template <typename T>
+static void PrintTimeDiff(std::ostream& out, T chrono_diff) {
+  namespace sc = std::chrono;
+  auto diff = sc::duration_cast<sc::milliseconds>(chrono_diff).count();
+  auto const msecs = diff % 1000;
+  diff /= 1000;
+  auto const secs = diff % 60;
+  diff /= 60;
+  auto const mins = diff % 60;
+  diff /= 60;
+  auto const hours = diff % 24;
+  diff /= 24;
+  auto const days = diff;
+
+  bool printed_earlier = false;
+  if (days >= 1) {
+    printed_earlier = true;
+    out << days << (1 != days ? " days " : " day ");
+  }
+  if (printed_earlier || hours >= 1) {
+    printed_earlier = true;
+    out << hours << (1 != hours ? " hours " : " hour ");
+  }
+  if (printed_earlier || mins >= 1) {
+    printed_earlier = true;
+    out << mins << (1 != mins ? " minutes " : " minute ");
+  }
+  if (printed_earlier || secs >= 1) {
+    printed_earlier = true;
+    out << secs << (1 != secs ? " seconds " : " second ");
+  }
+  if (printed_earlier || msecs >= 1) {
+    printed_earlier = true;
+    out << msecs << (1 != msecs ? " milliseconds" : " millisecond");
+  }
+}
+
+static std::chrono::milliseconds TimeNow() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch());
+}
+
+ProgressIndicator::ProgressIndicator(std::chrono::milliseconds update_period,
+                                     nc::EventQueue* event_queue)
+    : nc::EventConsumer("ProgressIndicator", event_queue),
+      period_(event_queue->ToTime(update_period)),
+      init_real_time_(TimeNow()) {
+  EnqueueIn(period_);
+}
+
+void ProgressIndicator::HandleEvent() {
+  double progress = event_queue()->Progress();
+  CHECK(progress >= 0 && progress <= 1.0);
+  std::cout << "\rProgress: " << std::setprecision(3) << (progress * 100.0)
+            << "% ";
+
+  auto real_time_delta = TimeNow() - init_real_time_;
+  if (real_time_delta.count() > 0) {
+    std::cout << "time remaining: ";
+    auto remaining = std::chrono::milliseconds(static_cast<uint64_t>(
+        real_time_delta.count() / progress * (1 - progress)));
+
+    PrintTimeDiff(std::cout, remaining);
+    std::cout << "                ";
+  }
+
+  std::cout << std::flush;
+  EnqueueIn(period_);
 }
 
 }  // namespace htsim
