@@ -188,7 +188,7 @@ std::map<SrcAndDst, std::vector<FlowAndPath>> MCProblem::RecoverPaths(
         *dst_index_and_commodities.second;
     for (const SrcAndLoad& commodity : commodities) {
       net::Links links;
-      net::GraphLinkSet links_set;
+      net::GraphNodeSet nodes_set;
       std::vector<FlowAndPath>& paths = out[{commodity.first, dst_index}];
       bool commodity_has_volume = commodity.second > net::Bandwidth::Zero();
 
@@ -196,7 +196,7 @@ std::map<SrcAndDst, std::vector<FlowAndPath>> MCProblem::RecoverPaths(
                                  ? commodity.second.Mbps()
                                  : std::numeric_limits<double>::max();
       RecoverPathsRecursive(commodity, dst_index, commodity.first,
-                            starting_flow, &link_to_flow, &links, &links_set,
+                            starting_flow, &link_to_flow, &links, &nodes_set,
                             &paths);
       if (commodity_has_volume) {
         double total_flow = 0;
@@ -216,7 +216,7 @@ double MCProblem::RecoverPathsRecursive(
     const SrcAndLoad& commodity, net::GraphNodeIndex dst_index,
     net::GraphNodeIndex at_node, double overall_flow,
     net::GraphLinkMap<double>* flow_over_links, net::Links* links_so_far,
-    net::GraphLinkSet* links_so_far_set, std::vector<FlowAndPath>* out) const {
+    net::GraphNodeSet* nodes_so_far_set, std::vector<FlowAndPath>* out) const {
   if (at_node == dst_index) {
     CHECK(overall_flow != std::numeric_limits<double>::max());
     if (commodity.second > net::Bandwidth::Zero()) {
@@ -232,7 +232,7 @@ double MCProblem::RecoverPathsRecursive(
     auto flow_on_path = net::Bandwidth::FromMBitsPerSecond(overall_flow);
     out->emplace_back(flow_on_path, std::move(new_path));
     //    LOG(ERROR) << "FF " << flow_on_path << " "
-    //               << new_path.ToStringNoPorts(graph_storage_);
+    //               << new_path->ToStringNoPorts(*graph_storage_);
     return 0;
   }
 
@@ -243,28 +243,33 @@ double MCProblem::RecoverPathsRecursive(
       continue;
     }
 
-    if (links_so_far_set->Contains(edge_out)) {
-      continue;
-    }
-
     const net::GraphLink* edge = graph_storage_->GetLink(edge_out);
     double& remaining = flow_over_links->GetValueOrDie(edge_out);
     double to_take = std::min(remaining, overall_flow);
     //    LOG(ERROR) << "OF " << overall_flow << " R " << remaining << " TT "
     //               << to_take << " at " <<
     //               graph_storage_->GetNode(at_node)->id();
-    if (to_take > 0) {
-      links_so_far->emplace_back(edge_out);
-      links_so_far_set->Insert(edge_out);
-      double remainder = RecoverPathsRecursive(
-          commodity, dst_index, edge->dst(), to_take, flow_over_links,
-          links_so_far, links_so_far_set, out);
-      overall_flow -= (to_take - remainder);
-      links_so_far_set->Remove(edge_out);
-      links_so_far->pop_back();
-      //      LOG(ERROR) << "Remainder " << remainder << " OF " << overall_flow
-      //                 << " at " << graph_storage_->GetNode(at_node)->id();
+    if (to_take <= 0) {
+      continue;
     }
+
+    links_so_far->emplace_back(edge_out);
+    net::GraphNodeIndex neighbor = edge->dst();
+    if (nodes_so_far_set->Contains(neighbor)) {
+      continue;
+    }
+
+    nodes_so_far_set->Insert(neighbor);
+    double remainder = RecoverPathsRecursive(
+        commodity, dst_index, neighbor, to_take, flow_over_links, links_so_far,
+        nodes_so_far_set, out);
+    overall_flow -= (to_take - remainder);
+
+    nodes_so_far_set->Remove(neighbor);
+    links_so_far->pop_back();
+    //    LOG(ERROR) << "Remainder " << remainder << " OF " << overall_flow << "
+    //    at "
+    //               << graph_storage_->GetNode(at_node)->id();
   }
 
   return overall_flow;

@@ -119,7 +119,7 @@ class MCProblem {
                                net::GraphNodeIndex at_node, double overall_flow,
                                net::GraphLinkMap<double>* flow_over_links,
                                net::Links* links_so_far,
-                               net::GraphLinkSet* links_so_far_set,
+                               net::GraphNodeSet* nodes_so_far_set,
                                std::vector<FlowAndPath>* out) const;
 
   DISALLOW_COPY_AND_ASSIGN(MCProblem);
