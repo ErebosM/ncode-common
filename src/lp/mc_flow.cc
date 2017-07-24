@@ -11,66 +11,54 @@
 namespace nc {
 namespace lp {
 
-MCProblem::MCProblem(const net::GraphLinkSet& to_exclude,
-                     const net::GraphStorage* graph_storage,
-                     double capacity_multiplier)
-    : all_links_(graph_storage->AllLinks()),
-      graph_storage_(graph_storage),
-      capacity_multiplier_(capacity_multiplier) {
-  all_links_.RemoveAll(to_exclude);
-  for (net::GraphLinkIndex link_index : all_links_) {
-    const net::GraphLink* link = graph_storage->GetLink(link_index);
+FlowProblem::FlowProblem(const net::GraphLinkMap<double>& link_capacities,
+                         const net::GraphStorage* graph)
+    : graph_(graph), link_capacities_(link_capacities) {
+  for (const auto& link_index_and_capacity : link_capacities) {
+    net::GraphLinkIndex link_index = link_index_and_capacity.first;
+    const net::GraphLink* link = graph_->GetLink(link_index);
 
     net::GraphNodeIndex out = link->src();
     net::GraphNodeIndex in = link->dst();
-    adjacent_to_v_[out].first.emplace_back(link_index);
-    adjacent_to_v_[in].second.emplace_back(link_index);
+    adjacency_map_[out].first.emplace_back(link_index);
+    adjacency_map_[in].second.emplace_back(link_index);
   }
 }
 
-MCProblem::MCProblem(const MCProblem& mc_problem, double scale_factor,
-                     net::Bandwidth increment) {
-  graph_storage_ = mc_problem.graph_storage_;
-  capacity_multiplier_ = mc_problem.capacity_multiplier_;
-  adjacent_to_v_ = mc_problem.adjacent_to_v_;
-  all_links_ = mc_problem.all_links_;
+SingleCommodityFlowProblem::SingleCommodityFlowProblem(
+    const net::GraphLinkMap<double>& link_capacities,
+    const net::GraphStorage* graph)
+    : FlowProblem(link_capacities, graph) {}
 
-  for (const auto& dst_index_and_commodities : mc_problem.commodities_) {
-    net::GraphNodeIndex dst_index = dst_index_and_commodities.first;
-    const std::vector<SrcAndLoad>& commodities =
-        *dst_index_and_commodities.second;
-
-    std::vector<SrcAndLoad>& other_commodities = commodities_[dst_index];
-    for (const auto& src_and_load : commodities) {
-      net::Bandwidth new_demand = net::Bandwidth::FromMBitsPerSecond(
-          src_and_load.second.Mbps() * scale_factor + increment.Mbps());
-      other_commodities.emplace_back(src_and_load.first, new_demand);
+SingleCommodityFlowProblem::SingleCommodityFlowProblem(
+    const SingleCommodityFlowProblem& other, double scale_factor,
+    double increment)
+    : FlowProblem(other.link_capacities(), other.graph_),
+      demands_(other.demands_) {
+  for (auto node_and_demands : demands_) {
+    std::vector<SrcAndLoad>& loads_for_destination = *node_and_demands.second;
+    for (SrcAndLoad& load : loads_for_destination) {
+      load.second = load.second * scale_factor + increment;
     }
   }
 }
 
-MCProblem::VarMap MCProblem::GetLinkToVariableMap(
-    bool constrain_links, Problem* problem,
-    std::vector<ProblemMatrixElement>* problem_matrix) {
+SingleCommodityFlowProblem::VarMap
+SingleCommodityFlowProblem::GetLinkToVariableMap(
+    Problem* problem, std::vector<ProblemMatrixElement>* problem_matrix) {
   VarMap link_to_variables;
 
   // There will be a variable per-link per-destination.
-  for (net::GraphLinkIndex link_index : all_links_) {
-    const net::GraphLink* link = graph_storage_->GetLink(link_index);
+  for (const auto& link_and_capacity : link_capacities()) {
+    net::GraphLinkIndex link_index = link_and_capacity.first;
+    double capacity = *link_and_capacity.second;
 
     // One constraint per link to make sure the sum of all commodities over it
     // fit the capacity of the link.
     ConstraintIndex link_constraint = problem->AddConstraint();
 
-    double scaled_limit;
-    if (constrain_links) {
-      scaled_limit = link->bandwidth().Mbps() * capacity_multiplier_;
-    } else {
-      scaled_limit = Problem::kInifinity;
-    }
-
-    problem->SetConstraintRange(link_constraint, 0, scaled_limit);
-    for (const auto& dst_index_and_commodities : commodities_) {
+    problem->SetConstraintRange(link_constraint, 0, capacity);
+    for (const auto& dst_index_and_commodities : demands_) {
       net::GraphNodeIndex dst_index = dst_index_and_commodities.first;
       VariableIndex var = problem->AddVariable();
       problem->SetVariableRange(var, 0, Problem::kInifinity);
@@ -83,7 +71,32 @@ MCProblem::VarMap MCProblem::GetLinkToVariableMap(
   return link_to_variables;
 }
 
-static VariableIndex GetVar(const MCProblem::VarMap& var_map,
+SingleCommodityFlowProblem::VarMap
+SingleCommoditySingleSinkFlowProblem::GetLinkToVariableMap(
+    Problem* problem, std::vector<ProblemMatrixElement>* problem_matrix) {
+  VarMap link_to_variables;
+
+  // There will be a variable per-link per-destination.
+  for (const auto& link_and_capacity : link_capacities()) {
+    net::GraphLinkIndex link_index = link_and_capacity.first;
+    double capacity = *link_and_capacity.second;
+    ConstraintIndex link_constraint = problem->AddConstraint();
+
+    problem->SetConstraintRange(link_constraint, 0, capacity);
+    for (const auto& src_index_and_demand : demands_) {
+      net::GraphNodeIndex src_index = src_index_and_demand.first;
+      VariableIndex var = problem->AddVariable();
+      problem->SetVariableRange(var, 0, Problem::kInifinity);
+      link_to_variables[link_index][src_index] = var;
+
+      problem_matrix->emplace_back(link_constraint, var, 1.0);
+    }
+  }
+
+  return link_to_variables;
+}
+
+static VariableIndex GetVar(const SingleCommodityFlowProblem::VarMap& var_map,
                             net::GraphLinkIndex edge,
                             net::GraphNodeIndex dst_index) {
   const auto& vars = var_map[edge];
@@ -91,7 +104,7 @@ static VariableIndex GetVar(const MCProblem::VarMap& var_map,
 }
 
 static bool IsSource(const std::vector<SrcAndLoad>& commodities,
-                     net::GraphNodeIndex index, net::Bandwidth* load) {
+                     net::GraphNodeIndex index, double* load) {
   for (const auto& src_and_load : commodities) {
     if (src_and_load.first == index) {
       *load = src_and_load.second;
@@ -102,16 +115,16 @@ static bool IsSource(const std::vector<SrcAndLoad>& commodities,
   return false;
 }
 
-void MCProblem::AddFlowConservationConstraints(
+void SingleCommodityFlowProblem::AddFlowConservationConstraints(
     const VarMap& link_to_variables, Problem* problem,
     std::vector<ProblemMatrixElement>* problem_matrix) {
   // Per-commodity flow conservation.
-  for (const auto& dst_index_and_commodities : commodities_) {
+  for (const auto& dst_index_and_commodities : demands_) {
     net::GraphNodeIndex dst_index = dst_index_and_commodities.first;
     const std::vector<SrcAndLoad>& commodities =
         *dst_index_and_commodities.second;
 
-    for (const auto& node_and_adj_lists : adjacent_to_v_) {
+    for (const auto& node_and_adj_lists : adjacency_map()) {
       net::GraphNodeIndex node = node_and_adj_lists.first;
 
       const std::vector<net::GraphLinkIndex>& edges_out =
@@ -125,13 +138,12 @@ void MCProblem::AddFlowConservationConstraints(
       ConstraintIndex flow_conservation_constraint = problem->AddConstraint();
       problem->SetConstraintRange(flow_conservation_constraint, 0, 0);
 
-      net::Bandwidth flow_from_source;
+      double flow_from_source;
       if (IsSource(commodities, node, &flow_from_source)) {
         // Traffic that leaves the source should sum up to at least the demand
         // of the commodity.
         ConstraintIndex source_load_constraint = problem->AddConstraint();
-        problem->SetConstraintRange(source_load_constraint,
-                                    flow_from_source.Mbps(),
+        problem->SetConstraintRange(source_load_constraint, flow_from_source,
                                     Problem::kInifinity);
 
         for (net::GraphLinkIndex edge_out : edges_out) {
@@ -164,126 +176,71 @@ void MCProblem::AddFlowConservationConstraints(
   }
 }
 
-std::map<SrcAndDst, std::vector<FlowAndPath>> MCProblem::RecoverPaths(
-    const VarMap& link_to_variables, const lp::Solution& solution) const {
-  std::map<SrcAndDst, std::vector<FlowAndPath>> out;
+void SingleCommoditySingleSinkFlowProblem::AddFlowConservationConstraints(
+    const VarMap& link_to_variables, Problem* problem,
+    std::vector<ProblemMatrixElement>* problem_matrix) {
+  // Per-commodity flow conservation.
+  for (const auto& src_index_and_demand : demands_) {
+    net::GraphNodeIndex src_index = src_index_and_demand.first;
+    double demand = *src_index_and_demand.second;
 
-  for (const auto& dst_index_and_commodities : commodities_) {
-    net::GraphNodeIndex dst_index = dst_index_and_commodities.first;
+    for (const auto& node_and_adj_lists : adjacency_map()) {
+      net::GraphNodeIndex node = node_and_adj_lists.first;
 
-    net::GraphLinkMap<double> link_to_flow;
-    for (const auto& link_and_variables : link_to_variables) {
-      net::GraphLinkIndex link = link_and_variables.first;
-      const net::GraphNodeMap<VariableIndex>& variables =
-          *link_and_variables.second;
-      CHECK(variables.HasValue(dst_index));
+      const std::vector<net::GraphLinkIndex>& edges_out =
+          node_and_adj_lists.second->first;
+      const std::vector<net::GraphLinkIndex>& edges_in =
+          node_and_adj_lists.second->second;
 
-      double flow = solution.VariableValue(variables[dst_index]);
-      if (flow > 0) {
-        link_to_flow[link] = flow;
-      }
-    }
+      ConstraintIndex flow_conservation_constraint = problem->AddConstraint();
+      problem->SetConstraintRange(flow_conservation_constraint, 0, 0);
 
-    const std::vector<SrcAndLoad>& commodities =
-        *dst_index_and_commodities.second;
-    for (const SrcAndLoad& commodity : commodities) {
-      net::Links links;
-      net::GraphNodeSet nodes_set;
-      std::vector<FlowAndPath>& paths = out[{commodity.first, dst_index}];
-      bool commodity_has_volume = commodity.second > net::Bandwidth::Zero();
+      if (node == src_index) {
+        ConstraintIndex source_load_constraint = problem->AddConstraint();
+        problem->SetConstraintRange(source_load_constraint, demand,
+                                    Problem::kInifinity);
 
-      double starting_flow = commodity_has_volume
-                                 ? commodity.second.Mbps()
-                                 : std::numeric_limits<double>::max();
-      RecoverPathsRecursive(commodity, dst_index, commodity.first,
-                            starting_flow, &link_to_flow, &links, &nodes_set,
-                            &paths);
-      if (commodity_has_volume) {
-        double total_flow = 0;
-        for (const FlowAndPath& path : paths) {
-          total_flow += path.flow().Mbps();
+        for (net::GraphLinkIndex edge_out : edges_out) {
+          VariableIndex var = GetVar(link_to_variables, edge_out, src_index);
+          problem_matrix->emplace_back(source_load_constraint, var, 1.0);
         }
-        CHECK(std::abs(total_flow - starting_flow) / total_flow < 0.01)
-            << total_flow << " vs " << starting_flow;
+
+        for (net::GraphLinkIndex edge_in : edges_in) {
+          VariableIndex var = GetVar(link_to_variables, edge_in, src_index);
+          problem_matrix->emplace_back(source_load_constraint, var, -1.0);
+        }
+
+      } else if (node == sink_) {
+        for (net::GraphLinkIndex edge_out : edges_out) {
+          VariableIndex var = GetVar(link_to_variables, edge_out, src_index);
+          problem_matrix->emplace_back(flow_conservation_constraint, var, 1.0);
+        }
+      } else {
+        for (net::GraphLinkIndex edge_out : edges_out) {
+          VariableIndex var = GetVar(link_to_variables, edge_out, src_index);
+          problem_matrix->emplace_back(flow_conservation_constraint, var, -1.0);
+        }
+
+        for (net::GraphLinkIndex edge_in : edges_in) {
+          VariableIndex var = GetVar(link_to_variables, edge_in, src_index);
+          problem_matrix->emplace_back(flow_conservation_constraint, var, 1.0);
+        }
       }
     }
   }
-
-  return out;
 }
 
-double MCProblem::RecoverPathsRecursive(
-    const SrcAndLoad& commodity, net::GraphNodeIndex dst_index,
-    net::GraphNodeIndex at_node, double overall_flow,
-    net::GraphLinkMap<double>* flow_over_links, net::Links* links_so_far,
-    net::GraphNodeSet* nodes_so_far_set, std::vector<FlowAndPath>* out) const {
-  if (at_node == dst_index) {
-    CHECK(overall_flow != std::numeric_limits<double>::max());
-    if (commodity.second > net::Bandwidth::Zero()) {
-      CHECK(overall_flow <= commodity.second.Mbps());
-    }
-
-    for (net::GraphLinkIndex link : *links_so_far) {
-      double& remaining = flow_over_links->GetValueOrDie(link);
-      remaining -= overall_flow;
-    }
-
-    auto new_path = make_unique<net::Walk>(*links_so_far, *graph_storage_);
-    auto flow_on_path = net::Bandwidth::FromMBitsPerSecond(overall_flow);
-    out->emplace_back(flow_on_path, std::move(new_path));
-    //    LOG(ERROR) << "FF " << flow_on_path << " "
-    //               << new_path->ToStringNoPorts(*graph_storage_);
-    return 0;
-  }
-
-  const auto& adj_lists = adjacent_to_v_.GetValueOrDie(at_node);
-  const std::vector<net::GraphLinkIndex>& edges_out = adj_lists.first;
-  for (net::GraphLinkIndex edge_out : edges_out) {
-    if (!flow_over_links->HasValue(edge_out)) {
-      continue;
-    }
-
-    const net::GraphLink* edge = graph_storage_->GetLink(edge_out);
-    double& remaining = flow_over_links->GetValueOrDie(edge_out);
-    double to_take = std::min(remaining, overall_flow);
-    //    LOG(ERROR) << "OF " << overall_flow << " R " << remaining << " TT "
-    //               << to_take << " at " <<
-    //               graph_storage_->GetNode(at_node)->id();
-    if (to_take <= 0) {
-      continue;
-    }
-
-    links_so_far->emplace_back(edge_out);
-    net::GraphNodeIndex neighbor = edge->dst();
-    if (nodes_so_far_set->Contains(neighbor)) {
-      continue;
-    }
-
-    nodes_so_far_set->Insert(neighbor);
-    double remainder = RecoverPathsRecursive(
-        commodity, dst_index, neighbor, to_take, flow_over_links, links_so_far,
-        nodes_so_far_set, out);
-    overall_flow -= (to_take - remainder);
-
-    nodes_so_far_set->Remove(neighbor);
-    links_so_far->pop_back();
-    //    LOG(ERROR) << "Remainder " << remainder << " OF " << overall_flow << "
-    //    at "
-    //               << graph_storage_->GetNode(at_node)->id();
-  }
-
-  return overall_flow;
+void SingleCommodityFlowProblem::AddDemand(const std::string& source,
+                                           const std::string& sink,
+                                           double demand) {
+  AddDemand(graph_->NodeFromStringOrDie(source),
+            graph_->NodeFromStringOrDie(sink), demand);
 }
 
-void MCProblem::AddCommodity(const std::string& source, const std::string& sink,
-                             net::Bandwidth demand) {
-  AddCommodity(graph_storage_->NodeFromStringOrDie(source),
-               graph_storage_->NodeFromStringOrDie(sink), demand);
-}
-
-void MCProblem::AddCommodity(net::GraphNodeIndex source,
-                             net::GraphNodeIndex sink, net::Bandwidth demand) {
-  std::vector<SrcAndLoad>& src_and_loads = commodities_[sink];
+void SingleCommodityFlowProblem::AddDemand(net::GraphNodeIndex source,
+                                           net::GraphNodeIndex sink,
+                                           double demand) {
+  std::vector<SrcAndLoad>& src_and_loads = demands_[sink];
   for (const SrcAndLoad& src_and_load : src_and_loads) {
     CHECK(src_and_load.first != source);
   }
@@ -291,11 +248,10 @@ void MCProblem::AddCommodity(net::GraphNodeIndex source,
   src_and_loads.emplace_back(source, demand);
 }
 
-bool MCProblem::IsFeasible() {
+bool SingleCommodityFlowProblem::IsFeasible() {
   Problem problem(MAXIMIZE);
   std::vector<ProblemMatrixElement> problem_matrix;
-  VarMap link_to_variables =
-      GetLinkToVariableMap(true, &problem, &problem_matrix);
+  VarMap link_to_variables = GetLinkToVariableMap(&problem, &problem_matrix);
   AddFlowConservationConstraints(link_to_variables, &problem, &problem_matrix);
 
   // Solve the problem.
@@ -307,17 +263,17 @@ bool MCProblem::IsFeasible() {
 static constexpr double kMaxScaleFactor = 10000000.0;
 static constexpr double kStopThreshold = 0.0001;
 
-double MCProblem::MaxCommodityScaleFactor() {
+double SingleCommodityFlowProblem::MaxDemandScaleFactor() {
   if (!IsFeasible()) {
     return 0;
   }
 
   bool all_zero = true;
-  for (const auto& dst_index_and_commodities : commodities_) {
+  for (const auto& dst_index_and_commodities : demands_) {
     const std::vector<SrcAndLoad>& commodities =
         *dst_index_and_commodities.second;
     for (const SrcAndLoad& commodity : commodities) {
-      if (commodity.second != net::Bandwidth::Zero()) {
+      if (commodity.second != 0) {
         all_zero = false;
         break;
       }
@@ -346,7 +302,7 @@ double MCProblem::MaxCommodityScaleFactor() {
     }
 
     double guess = min_bound + (max_bound - min_bound) / 2;
-    MCProblem test_problem(*this, guess, net::Bandwidth::Zero());
+    SingleCommodityFlowProblem test_problem(*this, guess, 0);
 
     bool is_feasible = test_problem.IsFeasible();
     if (is_feasible) {
@@ -364,24 +320,21 @@ double MCProblem::MaxCommodityScaleFactor() {
   return curr_estimate;
 }
 
-net::Bandwidth MCProblem::MaxCommodityIncrement() {
-  if (!IsFeasible() || commodities_.Count() == 0) {
-    return net::Bandwidth::Zero();
+double SingleCommodityFlowProblem::MaxDemandIncrement() {
+  if (!IsFeasible() || demands_.Count() == 0) {
+    return 0;
   }
 
   // The initial increment will be the max of the cpacity of all links.
-  net::Bandwidth max_capacity = net::Bandwidth::Zero();
-  for (net::GraphLinkIndex link_index : all_links_) {
-    const net::GraphLink* link = graph_storage_->GetLink(link_index);
-
-    if (link->bandwidth() > max_capacity) {
-      max_capacity = link->bandwidth();
-    }
+  double max_capacity = 0;
+  for (const auto& link_and_capacity : link_capacities()) {
+    double capacity = *link_and_capacity.second;
+    max_capacity = std::max(max_capacity, capacity);
   }
 
   double min_bound = 1.0;
-  double max_bound = max_capacity.bps();
-  double curr_estimate = max_capacity.bps();
+  double max_bound = max_capacity;
+  double curr_estimate = max_capacity;
   while (true) {
     CHECK(max_bound >= min_bound);
     double delta = max_bound - min_bound;
@@ -390,8 +343,7 @@ net::Bandwidth MCProblem::MaxCommodityIncrement() {
     }
 
     double guess = min_bound + (max_bound - min_bound) / 2;
-    MCProblem test_problem(*this, 1.0,
-                           net::Bandwidth::FromBitsPerSecond(guess));
+    SingleCommodityFlowProblem test_problem(*this, 1.0, guess);
 
     bool is_feasible = test_problem.IsFeasible();
     if (is_feasible) {
@@ -402,26 +354,156 @@ net::Bandwidth MCProblem::MaxCommodityIncrement() {
     }
   }
 
-  return net::Bandwidth::FromBitsPerSecond(curr_estimate);
+  return curr_estimate;
 }
 
-bool MaxFlowMCProblem::GetMaxFlow(
-    net::Bandwidth* max_flow,
-    std::map<SrcAndDst, std::vector<FlowAndPath>>* paths) {
-  Problem problem(MAXIMIZE);
+net::GraphNodeMap<std::vector<FlowAndPath>>
+SingleCommoditySingleSinkFlowProblem::RecoverPaths(
+    const VarMap& link_to_variables, const lp::Solution& solution) const {
+  std::map<SrcAndDst, std::vector<FlowAndPath>> out;
+
+  for (const auto& src_index_and_demand : demands_) {
+    net::GraphNodeIndex src_index = src_index_and_demand.first;
+    double demand = *src_index_and_demand.second;
+
+    net::GraphLinkMap<double> link_to_flow;
+    for (const auto& link_and_variables : link_to_variables) {
+      net::GraphLinkIndex link = link_and_variables.first;
+      const net::GraphNodeMap<VariableIndex>& variables =
+          *link_and_variables.second;
+      CHECK(variables.HasValue(src_index));
+
+      double flow = solution.VariableValue(variables[src_index]);
+      if (flow > 0) {
+        link_to_flow[link] = flow;
+      }
+    }
+
+    net::Links links;
+    net::GraphNodeSet nodes_set;
+    std::vector<FlowAndPath>& paths = out[src_index];
+    bool commodity_has_volume = demand > 0;
+
+    double starting_flow =
+        commodity_has_volume ? demand : std::numeric_limits<double>::max();
+    RecoverPathsRecursive(demand, src_index, starting_flow, &link_to_flow,
+                          &links, &nodes_set, &paths);
+    if (commodity_has_volume) {
+      double total_flow = 0;
+      for (const FlowAndPath& path : paths) {
+        total_flow += path.flow();
+      }
+      CHECK(std::abs(total_flow - starting_flow) / total_flow < 0.01)
+          << total_flow << " vs " << starting_flow;
+    }
+  }
+
+  return out;
+}
+
+double SingleCommoditySingleSinkFlowProblem::RecoverPathsRecursive(
+    double demand, net::GraphNodeIndex at_node, double overall_flow,
+    net::GraphLinkMap<double>* flow_over_links, net::Links* links_so_far,
+    net::GraphNodeSet* nodes_so_far_set, std::vector<FlowAndPath>* out) const {
+  if (at_node == sink_) {
+    CHECK(overall_flow != std::numeric_limits<double>::max());
+    if (demand > 0) {
+      CHECK(overall_flow <= demand);
+    }
+
+    for (net::GraphLinkIndex link : *links_so_far) {
+      double& remaining = flow_over_links->GetValueOrDie(link);
+      remaining -= overall_flow;
+    }
+
+    auto new_path = make_unique<net::Walk>(*links_so_far, *graph_);
+    out->emplace_back(overall_flow, std::move(new_path));
+    //    LOG(ERROR) << "FF " << flow_on_path << " "
+    //               << new_path->ToStringNoPorts(*graph_storage_);
+    return 0;
+  }
+
+  const auto& adj_lists = adjacency_map().GetValueOrDie(at_node);
+  const std::vector<net::GraphLinkIndex>& edges_out = adj_lists.first;
+  for (net::GraphLinkIndex edge_out : edges_out) {
+    if (!flow_over_links->HasValue(edge_out)) {
+      continue;
+    }
+
+    const net::GraphLink* edge = graph_->GetLink(edge_out);
+    double& remaining = flow_over_links->GetValueOrDie(edge_out);
+    double to_take = std::min(remaining, overall_flow);
+    //    LOG(ERROR) << "OF " << overall_flow << " R " << remaining << " TT "
+    //               << to_take << " at " <<
+    //               graph_storage_->GetNode(at_node)->id();
+    if (to_take <= 0) {
+      continue;
+    }
+
+    links_so_far->emplace_back(edge_out);
+    net::GraphNodeIndex neighbor = edge->dst();
+    if (nodes_so_far_set->Contains(neighbor)) {
+      continue;
+    }
+
+    nodes_so_far_set->Insert(neighbor);
+    double remainder =
+        RecoverPathsRecursive(demand, neighbor, to_take, flow_over_links,
+                              links_so_far, nodes_so_far_set, out);
+    overall_flow -= (to_take - remainder);
+
+    nodes_so_far_set->Remove(neighbor);
+    links_so_far->pop_back();
+    //    LOG(ERROR) << "Remainder " << remainder << " OF " << overall_flow << "
+    //    at "
+    //               << graph_storage_->GetNode(at_node)->id();
+  }
+
+  return overall_flow;
+}
+
+net::GraphNodeMap<std::vector<FlowAndPath>>
+SingleCommoditySingleSinkFlowProblem::GetShortestPaths() {
+  Problem problem(MINIMIZE);
   std::vector<ProblemMatrixElement> problem_matrix;
-  VarMap link_to_variables =
-      GetLinkToVariableMap(true, &problem, &problem_matrix);
+  VarMap link_to_variables = GetLinkToVariableMap(&problem, &problem_matrix);
   AddFlowConservationConstraints(link_to_variables, &problem, &problem_matrix);
 
-  for (const auto& dst_index_and_commodities : commodities_) {
-    net::GraphNodeIndex dst_index = dst_index_and_commodities.first;
-    const std::vector<SrcAndLoad>& commodities =
-        *dst_index_and_commodities.second;
+  for (const auto& link_and_sources : link_to_variables) {
+    net::GraphLinkIndex link_index = link_and_sources.first;
+    net::Delay link_delay = graph_->GetLink(link_index)->delay();
+    double link_cost =
+        std::chrono::duration<double, std::milli>(link_delay).count();
+
+    for (const auto& source_and_var : *link_and_sources.second) {
+      VariableIndex var = *source_and_var.second;
+      problem.SetObjectiveCoefficient(var, link_cost);
+    }
+  }
+
+  problem.SetMatrix(problem_matrix);
+  std::unique_ptr<Solution> solution = problem.Solve();
+  if (solution->type() != lp::OPTIMAL && solution->type() != lp::FEASIBLE) {
+    return {};
+  }
+
+  return RecoverPaths(link_to_variables, *solution);
+}
+
+bool MaxFlowSingleCommodityFlowProblem::GetMaxFlow(
+    double* max_flow, std::map<SrcAndDst, std::vector<FlowAndPath>>* paths) {
+  Problem problem(MAXIMIZE);
+  std::vector<ProblemMatrixElement> problem_matrix;
+  VarMap link_to_variables = GetLinkToVariableMap(&problem, &problem_matrix);
+  AddFlowConservationConstraints(link_to_variables, &problem, &problem_matrix);
+
+  for (const auto& dst_index_and_demands : demands_) {
+    net::GraphNodeIndex dst_index = dst_index_and_demands.first;
+    const std::vector<SrcAndLoad>& demands = *dst_index_and_demands.second;
 
     // Records net total flow per variable.
     std::map<VariableIndex, double> totals;
-    for (const auto& node_and_adj_lists : adjacent_to_v_) {
+    for (const auto& node_and_adj_lists : adjacency_map()) {
       net::GraphNodeIndex node = node_and_adj_lists.first;
 
       const std::vector<net::GraphLinkIndex>& edges_out =
@@ -429,8 +511,8 @@ bool MaxFlowMCProblem::GetMaxFlow(
       const std::vector<net::GraphLinkIndex>& edges_in =
           node_and_adj_lists.second->second;
 
-      net::Bandwidth flow_from_source;
-      if (IsSource(commodities, node, &flow_from_source)) {
+      double flow_from_source;
+      if (IsSource(demands, node, &flow_from_source)) {
         for (net::GraphLinkIndex edge_out : edges_out) {
           VariableIndex var = GetVar(link_to_variables, edge_out, dst_index);
           totals[var] += 1.0;
@@ -457,9 +539,43 @@ bool MaxFlowMCProblem::GetMaxFlow(
     return false;
   }
 
-  *max_flow = net::Bandwidth::FromMBitsPerSecond(solution->ObjectiveValue());
-  if (paths) {
-    *paths = RecoverPaths(link_to_variables, *solution);
+  *max_flow = solution->ObjectiveValue();
+  if (paths == nullptr) {
+    return true;
+  }
+
+  // Have to create a separate problem for each destination, as
+  // SingleCommodityFlowProblem groups demands by destination.
+  for (const auto& dst_and_srcs : demands_) {
+    net::GraphNodeIndex dst = dst_and_srcs.first;
+    const std::vector<SrcAndLoad>& sources_and_loads = *dst_and_srcs.second;
+
+    net::GraphLinkMap<double> capacities_for_destination;
+    for (const auto& link_and_variables : link_to_variables) {
+      net::GraphLinkIndex link_index = link_and_variables.first;
+      const net::GraphNodeMap<VariableIndex>& dst_to_variable =
+          link_and_variables.second;
+
+      // This variable in the solution will have the load on the link that is
+      // destined for 'dst'.
+      VariableIndex var = dst_to_variable.GetValueOrDie(dst);
+      double flow_over_link = solution->VariableValue(var);
+      capacities_for_destination[link_index] = flow_over_link;
+    }
+
+    SingleCommoditySingleSinkFlowProblem sub_problem(capacities_for_destination,
+                                                     dst, graph_);
+    for (const auto& src_and_load : sources_and_loads) {
+      sub_problem.AddDemand(src_and_load.first, src_and_load.second);
+    }
+
+    net::GraphNodeMap<std::vector<FlowAndPath>> paths =
+        sub_problem.GetShortestPaths();
+    for (auto src_and_paths : paths) {
+      net::GraphNodeIndex src = src_and_paths.first;
+      std::vector<FlowAndPath>& paths_for_src = *src_and_paths.second;
+      (*paths)[{src, dst}] = std::move(paths_for_src);
+    }
   }
 
   return true;
