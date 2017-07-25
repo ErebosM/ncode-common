@@ -209,15 +209,22 @@ SingleCommodityFlowProblem::RecoverPathsFromSolution(
       // destined for 'dst'.
       VariableIndex var = dst_to_variable.GetValueOrDie(dst);
       double flow_over_link = solution.VariableValue(var);
+      if (flow_over_link == 0) {
+        continue;
+      }
+
       capacities_for_destination[link_index] = flow_over_link;
       flow_exiting_sources[link->src()] += flow_over_link;
+      flow_exiting_sources[link->dst()] -= flow_over_link;
     }
 
     SingleCommoditySingleSinkFlowProblem sub_problem(capacities_for_destination,
                                                      dst, graph_);
     for (const auto& src_and_load : sources_and_loads) {
       net::GraphNodeIndex src = src_and_load.first;
-      sub_problem.AddDemand(src, flow_exiting_sources.GetValueOrDie(src));
+      double flow_out = flow_exiting_sources.GetValueOrDie(src);
+      double demand = src_and_load.second == 0 ? flow_out : src_and_load.second;
+      sub_problem.AddDemand(src, demand);
     }
 
     net::GraphNodeMap<std::vector<FlowAndPath>> paths_in_sub_problem =
