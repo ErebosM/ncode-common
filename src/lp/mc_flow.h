@@ -100,13 +100,19 @@ class SingleCommodityFlowProblem : public FlowProblem {
  protected:
   // Returns a map from a graph link to a list of one variable per demand
   // destination.
-  VarMap GetLinkToVariableMap(
-      Problem* problem, std::vector<ProblemMatrixElement>* problem_matrix);
+  VarMap GetLinkToVariableMap(Problem* problem,
+                              std::vector<ProblemMatrixElement>* problem_matrix,
+                              bool add_link_constraints);
 
   // Adds flow conservation constraints to the problem.
   void AddFlowConservationConstraints(
       const VarMap& link_to_variables, Problem* problem,
       std::vector<ProblemMatrixElement>* problem_matrix);
+
+  // Recovers the paths from a solution by constructing a
+  // SingleCommoditySingleSinkFlowProblem for each destination.
+  std::map<SrcAndDst, std::vector<FlowAndPath>> RecoverPathsFromSolution(
+      const VarMap& link_to_variables, const lp::Solution& solution);
 
   // The demands, grouped by destination.
   net::GraphNodeMap<std::vector<SrcAndLoad>> demands_;
@@ -174,8 +180,7 @@ class MaxFlowSingleCommodityFlowProblem : public SingleCommodityFlowProblem {
  public:
   MaxFlowSingleCommodityFlowProblem(
       const net::GraphLinkMap<double>& link_capacities,
-      const net::GraphStorage* graph)
-      : SingleCommodityFlowProblem(link_capacities, graph) {}
+      const net::GraphStorage* graph);
 
   // Populates the maximum flow (in the same units as edge bandwidth *
   // cpacity_multiplier_) for all commodities. If 'paths' is supplied will also

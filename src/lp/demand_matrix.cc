@@ -145,34 +145,47 @@ std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
   return make_unique<DemandMatrix>(new_elements, graph_);
 }
 
-std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
-    const net::GraphLinkSet& to_exclude) const {
-  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_);
-  for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
+static net::GraphLinkMap<double> GetCapacities(
+    const net::GraphLinkSet& to_exclude, const net::GraphStorage& graph) {
+  net::GraphLinkMap<double> out;
+  for (net::GraphLinkIndex link : graph.AllLinks()) {
+    if (to_exclude.Contains(link)) {
+      continue;
+    }
+
+    double capacity = graph.GetLink(link)->bandwidth().Mbps();
+    out[link] = capacity;
   }
 
-  net::Bandwidth max_flow = net::Bandwidth::Zero();
-  max_flow_problem.GetMaxFlow(&max_flow);
-  return std::make_pair(max_flow, max_flow_problem.MaxCommodityScaleFactor());
+  return out;
+}
+
+std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
+    const net::GraphLinkSet& to_exclude) const {
+  MaxFlowSingleCommodityFlowProblem max_flow_problem(
+      GetCapacities(to_exclude, *graph_), graph_);
+  for (const DemandMatrixElement& element : elements_) {
+    max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
+  }
+
+  double max_flow_mbps = 0;
+  max_flow_problem.GetMaxFlow(&max_flow_mbps);
+  return std::make_pair(net::Bandwidth::FromMBitsPerSecond(max_flow_mbps),
+                        max_flow_problem.MaxDemandScaleFactor());
 }
 
 bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude) const {
-  lp::MaxFlowMCProblem max_flow_problem(to_exclude, graph_);
+  MaxFlowSingleCommodityFlowProblem max_flow_problem(
+      GetCapacities(to_exclude, *graph_), graph_);
   for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
+    max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
   }
 
   return max_flow_problem.IsFeasible();
 }
 
 double DemandMatrix::MaxCommodityScaleFractor() const {
-  lp::MaxFlowMCProblem max_flow_problem({}, graph_);
-  for (const DemandMatrixElement& element : elements_) {
-    max_flow_problem.AddCommodity(element.src, element.dst, element.demand);
-  }
-
-  return max_flow_problem.MaxCommodityScaleFactor();
+  return GetMaxFlow({}).second;
 }
 
 bool DemandMatrix::ResilientToFailures() const {
