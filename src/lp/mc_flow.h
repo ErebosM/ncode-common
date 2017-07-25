@@ -133,8 +133,8 @@ class SingleCommoditySingleSinkFlowProblem : public FlowProblem {
       net::GraphNodeIndex sink, const net::GraphStorage* graph)
       : FlowProblem(link_capacities, graph), sink_(sink) {}
 
-  void AddDemand(const std::string& source, double demand = 0);
-  void AddDemand(net::GraphNodeIndex source, double demand = 0);
+  void AddDemand(const std::string& source, double demand);
+  void AddDemand(net::GraphNodeIndex source, double demand);
 
   // Solves the problem and returns the shortest paths (in terms of total delay)
   // that satisfy the demands. Returned grouped by source.

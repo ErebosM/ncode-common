@@ -35,8 +35,8 @@ TEST(Match, Empty) {
   Matcher matcher("test");
 
   net::FiveTuple five_tuple(kSrc, kDst, kProto, kSrcPort, kDstPort);
-  auto pkt =
-      make_unique<TCPPacket>(five_tuple, 10, EventQueueTime(100), SeqNum(0));
+  auto pkt = GetFreeList<TCPPacket>().New(five_tuple, 10, EventQueueTime(100),
+                                          SeqNum(0));
   ASSERT_EQ(nullptr, matcher.MatchOrNull(*pkt, kDeviceInputPort));
 }
 
@@ -76,7 +76,7 @@ class MatchFixture : public ::testing::Test {
                       AccessLayerPort src_port, AccessLayerPort dst_port,
                       IPProto ip_proto, PacketTag tag) {
     net::FiveTuple tuple(ip_src, ip_dst, ip_proto, src_port, dst_port);
-    auto pkt = make_unique<UDPPacket>(tuple, 10, EventQueueTime(10));
+    auto pkt = GetFreeList<UDPPacket>().New(tuple, 10, EventQueueTime(10));
     pkt->set_tag(tag);
     return std::move(pkt);
   }

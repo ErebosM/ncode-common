@@ -111,7 +111,8 @@ class TwoDeviceTest : public NetworkTest {
     const net::GraphLink* link = graph_storage_.LinkPtrOrDie("A", "B");
     pipe_ = make_unique<Pipe>(*link, &event_queue_);
     queue_ = make_unique<FIFOQueue>(*link, queue_size, &event_queue_);
-    network_.AddLink(queue_.get(), pipe_.get());
+    network_.AddLink(queue_.get(), pipe_.get(), "A", "B",
+                     net::DevicePortNumber(10), net::DevicePortNumber(20));
   }
 
   // Adds a match rule at the first device directing traffic from A to B.
@@ -125,7 +126,7 @@ class TwoDeviceTest : public NetworkTest {
     auto rule = make_unique<MatchRule>(key);
     rule->AddAction(std::move(action));
 
-    auto message = make_unique<SSCPAddOrUpdate>(
+    auto message = GetFreeList<SSCPAddOrUpdate>().New(
         kWildIPAddress, net::IPAddress(1), EventQueueTime(0), std::move(rule));
     device_a_.HandlePacket(std::move(message));
   }
@@ -249,7 +250,8 @@ class TwoDeviceTCPTest : public TwoDeviceTest {
     const net::GraphLink* link = graph_storage_.LinkPtrOrDie("B", "A");
     reverse_pipe_ = make_unique<Pipe>(*link, &event_queue_);
     reverse_queue_ = make_unique<FIFOQueue>(*link, queue_size, &event_queue_);
-    network_.AddLink(reverse_queue_.get(), reverse_pipe_.get());
+    network_.AddLink(reverse_queue_.get(), reverse_pipe_.get(), "B", "A",
+                     net::DevicePortNumber(20), net::DevicePortNumber(10));
   }
 
   void AddRoute() override {
@@ -263,7 +265,7 @@ class TwoDeviceTCPTest : public TwoDeviceTest {
     auto reverse_rule = make_unique<MatchRule>(key);
     reverse_rule->AddAction(std::move(reverse_action));
 
-    auto message = make_unique<SSCPAddOrUpdate>(
+    auto message = GetFreeList<SSCPAddOrUpdate>().New(
         kWildIPAddress, net::IPAddress(1), EventQueueTime(0),
         std::move(reverse_rule));
     device_b_.HandlePacket(std::move(message));
@@ -271,8 +273,11 @@ class TwoDeviceTCPTest : public TwoDeviceTest {
 
   // Adds a TCP generator with a number of bytes in the TX buffer.
   void AddTCPGenerator(uint64_t buffer_size_bytes) {
+    TCPSourceConfig tcp_source_config;
+    tcp_source_config.simulate_initial_handshake = false;
+    tcp_source_config.maxcwnd = 2000000;
     TCPSource* tcp_source = device_a_.AddTCPGenerator(
-        net::IPAddress(2), net::AccessLayerPort(100), 1500, 2000000);
+        tcp_source_config, net::IPAddress(2), net::AccessLayerPort(100));
     tcp_source->AddData(buffer_size_bytes);
   }
 

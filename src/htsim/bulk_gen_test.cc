@@ -24,7 +24,8 @@ class DummySource : public BulkPacketSource {
 
   PacketPtr GetPacket(milliseconds at) {
     net::FiveTuple tuple(kSrc, kDst, kProtoTCP, kSrcPort, kDstPort);
-    auto pkt = make_unique<UDPPacket>(tuple, kSize, event_queue_->ToTime(at));
+    auto pkt =
+        GetFreeList<UDPPacket>().New(tuple, kSize, event_queue_->ToTime(at));
     return std::move(pkt);
   }
 

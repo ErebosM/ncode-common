@@ -62,11 +62,11 @@ TEST(LoggingTest, DefaultLogging) {
   LOG(ERROR) << "An error.";
 
   std::string text = GetCapturedTestStderr();
-  EXPECT_EQ("[INFO " __FILE__ ":" + SimpleItoa(line + 1) +
-                "] A message.\n"
+  EXPECT_EQ("\r[INFO " __FILE__ ":" + SimpleItoa(line + 1) +
+                "] A message.\n\r"
                 "[WARNING " __FILE__ ":" +
                 SimpleItoa(line + 2) +
-                "] A warning.\n"
+                "] A warning.\n\r"
                 "[ERROR " __FILE__ ":" +
                 SimpleItoa(line + 3) + "] An error.\n",
             text);

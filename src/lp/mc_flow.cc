@@ -193,9 +193,15 @@ SingleCommodityFlowProblem::RecoverPathsFromSolution(
     net::GraphNodeIndex dst = dst_and_srcs.first;
     const std::vector<SrcAndLoad>& sources_and_loads = *dst_and_srcs.second;
 
+    // The flow that comes out of sources for the destination. This is more than
+    // or equal to the demand in demands_.
+    net::GraphNodeMap<double> flow_exiting_sources;
+
     net::GraphLinkMap<double> capacities_for_destination;
     for (const auto& link_and_variables : link_to_variables) {
       net::GraphLinkIndex link_index = link_and_variables.first;
+      const net::GraphLink* link = graph_->GetLink(link_index);
+
       const net::GraphNodeMap<VariableIndex>& dst_to_variable =
           *link_and_variables.second;
 
@@ -204,16 +210,20 @@ SingleCommodityFlowProblem::RecoverPathsFromSolution(
       VariableIndex var = dst_to_variable.GetValueOrDie(dst);
       double flow_over_link = solution.VariableValue(var);
       capacities_for_destination[link_index] = flow_over_link;
+      flow_exiting_sources[link->src()] += flow_over_link;
     }
 
     SingleCommoditySingleSinkFlowProblem sub_problem(capacities_for_destination,
                                                      dst, graph_);
     for (const auto& src_and_load : sources_and_loads) {
-      sub_problem.AddDemand(src_and_load.first, src_and_load.second);
+      net::GraphNodeIndex src = src_and_load.first;
+      sub_problem.AddDemand(src, flow_exiting_sources.GetValueOrDie(src));
     }
 
     net::GraphNodeMap<std::vector<FlowAndPath>> paths_in_sub_problem =
         sub_problem.GetShortestPaths();
+    CHECK(!paths_in_sub_problem.Empty());
+
     for (auto src_and_paths : paths_in_sub_problem) {
       net::GraphNodeIndex src = src_and_paths.first;
       std::vector<FlowAndPath>& paths_for_src = *src_and_paths.second;
@@ -448,14 +458,16 @@ SingleCommoditySingleSinkFlowProblem::RecoverPaths(
         commodity_has_volume ? demand : std::numeric_limits<double>::max();
     RecoverPathsRecursive(demand, src_index, starting_flow, &link_to_flow,
                           &links, &nodes_set, &paths);
-    if (commodity_has_volume) {
-      double total_flow = 0;
-      for (const FlowAndPath& path : paths) {
-        total_flow += path.flow();
-      }
-      CHECK(std::abs(total_flow - starting_flow) / total_flow < 0.01)
-          << total_flow << " vs " << starting_flow;
+    if (!commodity_has_volume) {
+      continue;
     }
+
+    double total_flow = 0;
+    for (const FlowAndPath& path : paths) {
+      total_flow += path.flow();
+    }
+    CHECK(std::abs(total_flow - starting_flow) / total_flow < 0.01)
+        << total_flow << " vs " << starting_flow;
   }
 
   return out;
@@ -478,8 +490,8 @@ double SingleCommoditySingleSinkFlowProblem::RecoverPathsRecursive(
 
     auto new_path = make_unique<net::Walk>(*links_so_far, *graph_);
     out->emplace_back(overall_flow, std::move(new_path));
-    //    LOG(ERROR) << "FF " << flow_on_path << " "
-    //               << new_path->ToStringNoPorts(*graph_storage_);
+    //    LOG(ERROR) << "FF " << overall_flow << " "
+    //               << new_path->ToStringNoPorts(*graph_);
     return 0;
   }
 
@@ -494,8 +506,7 @@ double SingleCommoditySingleSinkFlowProblem::RecoverPathsRecursive(
     double& remaining = flow_over_links->GetValueOrDie(edge_out);
     double to_take = std::min(remaining, overall_flow);
     //    LOG(ERROR) << "OF " << overall_flow << " R " << remaining << " TT "
-    //               << to_take << " at " <<
-    //               graph_storage_->GetNode(at_node)->id();
+    //               << to_take << " at " << graph_->GetNode(at_node)->id();
     if (to_take <= 0) {
       continue;
     }
@@ -516,7 +527,7 @@ double SingleCommoditySingleSinkFlowProblem::RecoverPathsRecursive(
     links_so_far->pop_back();
     //    LOG(ERROR) << "Remainder " << remainder << " OF " << overall_flow << "
     //    at "
-    //               << graph_storage_->GetNode(at_node)->id();
+    //               << graph_->GetNode(at_node)->id();
   }
 
   return overall_flow;

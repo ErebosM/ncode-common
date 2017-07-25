@@ -27,13 +27,21 @@ class TmGenTest : public ::testing::Test {
  protected:
   TmGenTest()
       : graph_storage_(GenerateFullGraph(2, kBw, kDelay)),
-        generator_(1, &graph_storage_) {}
+        generator_(1, &graph_storage_) {
+    generator_.SetMinOverloadedLinkCount(0);
+  }
+
+  std::unique_ptr<DemandMatrix> GetMatrix() {
+    return generator_.GenerateMatrix(1, 1.0, [](const DemandMatrix& matrix) {
+      return matrix.SPGlobalUtilization();
+    });
+  }
 
   GraphStorage graph_storage_;
   DemandGenerator generator_;
 };
 
-TEST_F(TmGenTest, Empty) { ASSERT_FALSE(generator_.GenerateMatrix()); }
+TEST_F(TmGenTest, Empty) { ASSERT_FALSE(GetMatrix()); }
 
 TEST_F(TmGenTest, BadFraction) {
   ASSERT_DEATH(generator_.AddUtilizationConstraint(1.1, 0.5), ".*");
@@ -43,14 +51,14 @@ TEST_F(TmGenTest, BadFraction) {
 // unbounded and can have arbitrariliy high utilization.
 TEST_F(TmGenTest, Unbounded) {
   generator_.AddUtilizationConstraint(0.9, 0.5);
-  ASSERT_FALSE(generator_.GenerateMatrix());
+  ASSERT_FALSE(GetMatrix());
 }
 
 // 100% of the links have utilization 0.5 or less, all of them should be at 0.5.
 TEST_F(TmGenTest, Full) {
   generator_.AddUtilizationConstraint(1.0, 0.5);
 
-  auto matrix = generator_.GenerateMatrix();
+  auto matrix = GetMatrix();
   ASSERT_TRUE(matrix);
   ASSERT_TRUE(LinkLoadEq({0.5, 0.5}, *matrix));
 }
@@ -61,7 +69,7 @@ TEST_F(TmGenTest, Half) {
   generator_.AddUtilizationConstraint(0.5, 0.6);
   generator_.AddUtilizationConstraint(1.0, 0.1);
 
-  auto matrix = generator_.GenerateMatrix();
+  auto matrix = GetMatrix();
   ASSERT_TRUE(matrix);
   ASSERT_TRUE(LinkLoadEq({0.1, 0.1}, *matrix));
 }
@@ -72,7 +80,7 @@ TEST_F(TmGenTest, HalfTwo) {
   generator_.AddUtilizationConstraint(0.5, 0.6);
   generator_.AddUtilizationConstraint(1.0, 0.8);
 
-  auto matrix = generator_.GenerateMatrix();
+  auto matrix = GetMatrix();
   ASSERT_TRUE(matrix);
   ASSERT_TRUE(LinkLoadEq({0.6, 0.8}, *matrix));
 
@@ -86,7 +94,7 @@ TEST_F(TmGenTest, HalfApprox) {
   generator_.AddUtilizationConstraint(0.6, 0.6);
   generator_.AddUtilizationConstraint(1.0, 0.8);
 
-  auto matrix = generator_.GenerateMatrix();
+  auto matrix = GetMatrix();
   ASSERT_TRUE(matrix);
   ASSERT_TRUE(LinkLoadEq({0.6, 0.8}, *matrix));
 }

@@ -83,7 +83,7 @@ TEST_F(ConnectionTest, EmptyStats) {
 }
 
 TEST_F(ConnectionTest, RxPacket) {
-  auto packet = make_unique<UDPPacket>(kTestTuple, kSize, kTime);
+  auto packet = GetFreeList<UDPPacket>().New(kTestTuple, kSize, kTime);
   DummyConnection dummy_connection(&mock_handler_, &event_queue_);
   dummy_connection.HandlePacket(std::move(packet));
 
@@ -94,7 +94,7 @@ TEST_F(ConnectionTest, RxPacket) {
 }
 
 TEST_F(ConnectionTest, TxPacket) {
-  auto packet = make_unique<UDPPacket>(kTestTuple, kSize, kTime);
+  auto packet = GetFreeList<UDPPacket>().New(kTestTuple, kSize, kTime);
   DummyConnection dummy_connection(&mock_handler_, &event_queue_);
   dummy_connection.SendPacket(std::move(packet));
 

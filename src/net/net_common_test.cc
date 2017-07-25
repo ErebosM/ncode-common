@@ -164,7 +164,7 @@ TEST_F(GraphStorageTest, WalkSingleLink) {
   ASSERT_LT(8ul, walk.InMemBytesEstimate());
   ASSERT_FALSE(walk.empty());
   ASSERT_EQ(Substitute("[$0]", link->ToString()), walk.ToString(storage));
-  ASSERT_EQ("[A->B] 20000μs", walk.ToStringNoPorts(storage));
+  ASSERT_EQ("[A->B] 20ms", walk.ToStringNoPorts(storage));
 
   ASSERT_TRUE(walk.IsTrail());
   ASSERT_TRUE(walk.IsPath(storage));

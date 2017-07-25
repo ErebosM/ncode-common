@@ -405,7 +405,8 @@ std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(
 
     size_t overloaded_link_count = matrix->OverloadedSPLinkCount();
     if (overloaded_link_count < min_overloaded_link_count_) {
-      LOG(INFO) << "Try " << i << ": overloaded link count too low";
+      LOG(INFO) << "Try " << i << ": overloaded link count too low " << i
+                << " vs " << min_overloaded_link_count_;
       continue;
     }
 
