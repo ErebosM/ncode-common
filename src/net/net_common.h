@@ -441,6 +441,9 @@ class GraphStorage {
   // or has multiple inverses will die.
   GraphLinkIndex FindUniqueInverseOrDie(const GraphLink* link) const;
 
+  // Same as above, but will return null if there is no inverse.
+  const GraphLinkIndex* FindUniqueInverseOrNull(const GraphLink* link) const;
+
   // Relates from indices to link objects.
   const GraphLink* GetLink(GraphLinkIndex index) const;
 

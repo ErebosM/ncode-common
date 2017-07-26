@@ -42,6 +42,28 @@ GraphLinkIndex GraphStorage::FindUniqueInverseOrDie(
   return links.front();
 }
 
+const GraphLinkIndex* GraphStorage::FindUniqueInverseOrNull(
+    const GraphLink* link) const {
+  const std::string& src = GetNode(link->src())->id();
+  const std::string& dst = GetNode(link->dst())->id();
+
+  const auto* dst_to_links = FindOrNull(links_, dst);
+  if (dst_to_links == nullptr) {
+    return nullptr;
+  }
+
+  const Links* links = FindOrNull(*dst_to_links, src);
+  if (links == nullptr) {
+    return nullptr;
+  }
+
+  if (links->size() != 1) {
+    return nullptr;
+  }
+
+  return &(links->front());
+}
+
 const GraphLink* GraphStorage::GetLink(GraphLinkIndex link_index) const {
   return link_store_.GetItemOrDie(link_index).get();
 }

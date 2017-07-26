@@ -457,6 +457,11 @@ std::vector<GraphNodeIndex> CombineWaypoints(
     const AdjacencyList& adj_list,
     const std::vector<std::vector<GraphNodeIndex>>& waypoints);
 
+// Returns the set of links which are part of all nodes' shortest path trees and
+// the fraction of all links this represents. The links will be one-way,
+// bidirectional links will only be counted once.
+std::pair<GraphLinkSet, double> CommonSPLinks(const GraphStorage& graph);
+
 }  // namespace net
 }  // namespace nc
 

@@ -175,6 +175,23 @@ class PerfectHashSet {
     return false;
   }
 
+  // Given this set and another will return a set with the elements from
+  // 'other' that are in both sets.
+  PerfectHashSet<V, Tag> Intersection(
+      const PerfectHashSet<V, Tag>& other) const {
+    const std::vector<char>& other_set = other.set_;
+    PerfectHashSet<V, Tag> out;
+
+    size_t to = std::min(other_set.size(), set_.size());
+    for (size_t i = 0; i < to; ++i) {
+      if (set_[i] && other_set[i]) {
+        out.Insert(Index<Tag, V>(i));
+      }
+    }
+
+    return out;
+  }
+
   // Returns true if this set shares any elements in common with another one.
   bool Intersects(const PerfectHashSet<V, Tag>& other) const {
     const std::vector<char>& other_set = other.set_;

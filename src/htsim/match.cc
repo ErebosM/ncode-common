@@ -278,7 +278,7 @@ void Matcher::AddRule(std::unique_ptr<MatchRule> rule) {
   }
 
   std::string prefix = to_clear == nullptr ? "Added" : "Updated";
-  LOG(INFO) << prefix << " rule " << rule_raw_ptr->ToString() << " at " << id_;
+  //LOG(INFO) << prefix << " rule " << rule_raw_ptr->ToString() << " at " << id_;
 }
 
 void Matcher::PopulateSSCPStats(bool include_flow_counts,

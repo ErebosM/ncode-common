@@ -1001,5 +1001,49 @@ std::vector<GraphNodeIndex> CombineWaypoints(
           std::next(current_waypoints.end(), -1)};
 }
 
+std::pair<GraphLinkSet, double> CommonSPLinks(const GraphStorage& graph) {
+  GraphLinkSet out;
+  GraphLinkSet all_links;
+
+  const AdjacencyList& adj_list = graph.AdjacencyList();
+  for (GraphNodeIndex root : adj_list.AllNodes()) {
+    GraphNodeSet others = adj_list.AllNodes();
+    others.Remove(root);
+
+    ShortestPath sp(root, others, {}, adj_list);
+    GraphLinkSet links_in_tree;
+    std::tie(std::ignore, links_in_tree) = sp.ElementsInTree();
+
+    GraphLinkSet links_in_tree_same_way;
+    for (GraphLinkIndex link_index : links_in_tree) {
+      const nc::net::GraphLink* link = graph.GetLink(link_index);
+      GraphNodeIndex link_src = link->src();
+      GraphNodeIndex link_dst = link->dst();
+      if (link_src < link_dst) {
+        links_in_tree_same_way.Insert(link_index);
+        continue;
+      }
+
+      const nc::net::GraphLinkIndex* inverse_link_index =
+          graph.FindUniqueInverseOrNull(link);
+      if (inverse_link_index == nullptr) {
+        links_in_tree_same_way.Insert(link_index);
+        continue;
+      }
+
+      links_in_tree_same_way.Insert(*inverse_link_index);
+    }
+
+    all_links.InsertAll(links_in_tree_same_way);
+    if (out.Empty()) {
+      out = links_in_tree_same_way;
+    } else {
+      out = out.Intersection(links_in_tree_same_way);
+    }
+  }
+
+  return {out, out.Count() / static_cast<double>(all_links.Count())};
+}
+
 }  // namespace nc
 }  // namespace ncode
