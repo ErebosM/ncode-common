@@ -337,6 +337,12 @@ class KShortestPathsGenerator {
 
   const ConstraintSet& constraints() const { return constraints_; }
 
+  // Given a path will return the k-index for it---i.e., its index in the
+  // sequence of K shortest paths. This involves generating (and storing) all
+  // paths up to K, so it may be very expensive / cause you to run out of
+  // memory.
+  size_t KforPath(const Walk& to_look_for, size_t k_limit = 10000);
+
  private:
   using PathAndStartIndex = std::pair<std::unique_ptr<Walk>, size_t>;
   struct PathAndStartIndexComparator {
@@ -396,7 +402,7 @@ class DisjunctKShortestPathsGenerator {
   // with the index of the generator that the path comes from.
   const Walk* KthShortestPathOrNull(size_t k, size_t* gen_index = nullptr);
 
-  // Returns the generator at a given index.
+  // Returns the generator at a given index in the constraint set.
   const KShortestPathsGenerator* ksp_generator(size_t i) const {
     CHECK(i < ksp_generators_.size());
     return ksp_generators_[i].get();

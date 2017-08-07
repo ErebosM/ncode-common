@@ -198,6 +198,9 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    add_executable(perfect_hash_benchmark src/perfect_hash_benchmark.cc)
    target_link_libraries(perfect_hash_benchmark ncode)
 
+   add_executable(algorithm_benchmark src/net/algorithm_benchmark.cc)
+   target_link_libraries(algorithm_benchmark ncode)
+   
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode)
 endif()

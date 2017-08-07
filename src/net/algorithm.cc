@@ -745,6 +745,20 @@ const Walk* KShortestPathsGenerator::KthShortestPathOrNull(size_t k) {
   return k_paths_.back().first.get();
 }
 
+size_t KShortestPathsGenerator::KforPath(const Walk& to_look_for,
+                                         size_t k_limit) {
+  for (size_t k = 0; k < k_limit; ++k) {
+    const Walk* path = KthShortestPathOrNull(k);
+    CHECK(path->delay() <= to_look_for.delay());
+
+    if (to_look_for == *path) {
+      return k;
+    }
+  }
+
+  return k_limit;
+}
+
 KShortestPathGeneratorStats KShortestPathsGenerator::GetStats() const {
   KShortestPathGeneratorStats stats;
   stats.k = k_paths_.size();
