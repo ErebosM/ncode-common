@@ -326,7 +326,7 @@ std::unique_ptr<Walk> ShortestPath::GetPath(GraphNodeIndex dst) const {
   }
 
   Delay distance = min_delays_[dst].distance;
-  return make_unique<Walk>(links, distance);
+  return make_unique<Walk>(std::move(links), distance);
 }
 
 Delay ShortestPath::GetPathDistance(GraphNodeIndex dst) const {

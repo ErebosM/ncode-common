@@ -39,6 +39,12 @@ class PackedUintSeq {
   // Copies out the sequence in a standard vector.
   void Restore(std::vector<uint64_t>* vector) const;
 
+  std::vector<uint64_t> Restore() const {
+    std::vector<uint64_t> out;
+    Restore(&out);
+    return out;
+  }
+
  private:
   // The limits on how many bytes can be used to encode an integer.
   static constexpr uint64_t kOneByteLimit = 32;              // 2 ** (8 - 3)
@@ -193,6 +199,12 @@ class RLEField {
         vector->push_back(stride.value_ + (i + 1) * stride.increment_);
       }
     }
+  }
+
+  std::vector<T> Restore() const {
+    std::vector<T> out;
+    Restore(&out);
+    return out;
   }
 
  private:

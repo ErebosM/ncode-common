@@ -257,6 +257,7 @@ class Walk {
  public:
   Walk();
   Walk(const Links& links, Delay delay);
+  Walk(const Links&& links, Delay delay);
   Walk(const Links& links, const GraphStorage& storage);
 
   // Returns true if any of the links in this walk is equal to link.

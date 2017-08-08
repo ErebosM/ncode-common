@@ -384,6 +384,9 @@ Walk::Walk() : delay_(Delay::zero()) {}
 
 Walk::Walk(const Links& links, Delay delay) : links_(links), delay_(delay) {}
 
+Walk::Walk(const Links&& links, Delay delay)
+    : links_(std::move(links)), delay_(delay) {}
+
 Walk::Walk(const Links& links, const GraphStorage& storage)
     : Walk(links, TotalDelayOfLinks(links, storage)) {}
 

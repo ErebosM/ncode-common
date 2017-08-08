@@ -193,14 +193,14 @@ class ShortestPath {
   // The source.
   GraphNodeIndex src_;
 
+  // The destinations.
+  GraphNodeSet destinations_;
+
   // For each node, the link that leads to it in the SP tree.
   GraphNodeMap<const AdjacencyList::LinkInfo*> previous_;
 
   // Delays from the source to each destination node.
   GraphNodeMap<DistanceFromSource> min_delays_;
-
-  // The destinations.
-  GraphNodeSet destinations_;
 };
 
 // Computes shortest paths between all pairs of nodes, can also be used to

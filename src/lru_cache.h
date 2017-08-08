@@ -100,6 +100,17 @@ class LRUCache {
     Unused(value);
   };
 
+  std::unordered_map<K, const V*, Hash, Pred> Values() const {
+    std::unordered_map<K, const V*, Hash, Pred> out;
+    for (const auto& key_and_rest : cache_map_) {
+      const K& key = key_and_rest.first;
+      const ObjectAndListIterator& rest = key_and_rest.second;
+      out[key] = rest.object.get();
+    }
+
+    return out;
+  }
+
  private:
   using LRUList = std::list<K>;
   struct ObjectAndListIterator {
