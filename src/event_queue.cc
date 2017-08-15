@@ -90,9 +90,16 @@ void EventQueue::EvictConsumer(EventConsumer* consumer) {
   }
 }
 
+static EventQueueTime CurrentRealTimeFromNanos() {
+  using namespace std::chrono;
+
+  auto duration = high_resolution_clock::now().time_since_epoch();
+  nanoseconds duration_nanos = duration_cast<nanoseconds>(duration);
+  return EventQueueTime(duration_nanos.count());
+}
+
 EventQueueTime RealTimeEventQueue::CurrentTime() const {
-  return EventQueueTime(
-      std::chrono::high_resolution_clock::now().time_since_epoch().count());
+  return CurrentRealTimeFromNanos();
 }
 
 EventQueueTime RealTimeEventQueue::NanosToTime(
@@ -106,6 +113,16 @@ std::chrono::nanoseconds RealTimeEventQueue::TimeToNanos(
 }
 
 void RealTimeEventQueue::AdvanceTimeTo(EventQueueTime at) {
+  if (busy_wait_) {
+    while (true) {
+      if (CurrentTime() >= at) {
+        break;
+      }
+    }
+
+    return;
+  }
+
   auto current_time = CurrentTime();
   if (current_time >= at) {
     return;

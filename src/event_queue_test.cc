@@ -37,7 +37,7 @@ class DummyConsumer : public EventConsumer {
 
 class EventFixture : public ::testing::Test {
  protected:
-  EventFixture() {
+  EventFixture() : queue_(true) {
     c1_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(5); });
     c2_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(3); });
     c3_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(2); });
@@ -87,7 +87,7 @@ TEST_F(EventFixture, OrderDouble) {
 
 class PeriodicRunnerFixture : public ::testing::Test {
  protected:
-  PeriodicRunnerFixture() : queue_() {}
+  PeriodicRunnerFixture() : queue_(true) {}
 
   void AddPeriodicConsumer(nanoseconds period, std::function<void()> callback) {
     assert(!consumer_);
@@ -110,7 +110,7 @@ TEST_F(PeriodicRunnerFixture, ZeroPeriod) {
   ASSERT_LT(0, i);
 }
 
-TEST_F(PeriodicRunnerFixture, DISABLED_AvgPeriod) {
+TEST_F(PeriodicRunnerFixture, AvgPeriod) {
   int i = 0;
   AddPeriodicConsumer(nanoseconds(milliseconds(10)), [&i] { i++; });
 
@@ -118,7 +118,7 @@ TEST_F(PeriodicRunnerFixture, DISABLED_AvgPeriod) {
   ASSERT_NEAR(50, i, 5);
 }
 
-TEST_F(PeriodicRunnerFixture, DISABLED_SlowTask) {
+TEST_F(PeriodicRunnerFixture, SlowTask) {
   int i = 0;
   AddPeriodicConsumer(nanoseconds(milliseconds(6)), [&i] {
     std::this_thread::sleep_for(milliseconds(5));
@@ -150,7 +150,7 @@ TEST_F(PeriodicRunnerFixture, CleanDestruction) {
                       [] { std::this_thread::sleep_for(milliseconds(1)); });
 }
 
-TEST_F(PeriodicRunnerFixture, DISABLED_AverageRate) {
+TEST_F(PeriodicRunnerFixture, AverageRate) {
   int i = 0;
   AddPeriodicConsumer(nanoseconds(milliseconds(20)), [&i] {
     size_t sleep_time = 10;
