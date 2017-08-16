@@ -143,8 +143,8 @@ set(LP_HEADER_FILES src/lp/lp.h src/lp/mc_flow.h src/lp/demand_matrix.h)
 add_library(ncode_lp OBJECT src/lp/lp.cc src/lp/mc_flow.cc src/lp/demand_matrix.cc)
 
 # HTSim
-set(SIM_HEADER_FILES src/htsim/match.h src/htsim/packet.h src/htsim/htsim.h src/htsim/bulk_gen.h src/htsim/animator.h src/htsim/queue.h src/htsim/pcap_consumer.h src/htsim/tcp.h src/htsim/udp.h /src/htsim/network.h src/htsim/flow_driver.h src/htsim/flow_counter.h)
-add_library(ncode_htsim OBJECT src/htsim/match.cc src/htsim/packet.cc src/htsim/bulk_gen.cc src/htsim/animator.cc src/htsim/queue.cc src/htsim/pcap_consumer.cc src/htsim/tcp.cc src/htsim/udp.cc src/htsim/network.cc src/htsim/flow_driver.cc src/htsim/flow_counter.cc)
+set(SIM_HEADER_FILES src/htsim/match.h src/htsim/packet.h src/htsim/htsim.h src/htsim/bulk_gen.h src/htsim/animator.h src/htsim/queue.h src/htsim/pcap_consumer.h src/htsim/tcp.h src/htsim/udp.h /src/htsim/network.h src/htsim/flow_driver.h src/htsim/flow_counter.h src/htsim/physical.h)
+add_library(ncode_htsim OBJECT src/htsim/match.cc src/htsim/packet.cc src/htsim/bulk_gen.cc src/htsim/animator.cc src/htsim/queue.cc src/htsim/pcap_consumer.cc src/htsim/tcp.cc src/htsim/udp.cc src/htsim/network.cc src/htsim/flow_driver.cc src/htsim/flow_counter.cc src/htsim/physical.cc)
 
 add_library(ncode STATIC $<TARGET_OBJECTS:ncode_common> $<TARGET_OBJECTS:ncode_net> $<TARGET_OBJECTS:ctemplate> $<TARGET_OBJECTS:ncode_viz> $<TARGET_OBJECTS:ncode_lp> $<TARGET_OBJECTS:ncode_htsim>)
 target_link_libraries(ncode ${PCAP_LIBRARY} ${OPTIMIZER_LIBRARIES})
@@ -203,4 +203,7 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    
    add_executable(free_list_benchmark src/free_list_benchmark.cc)
    target_link_libraries(free_list_benchmark ncode)
+
+   add_executable(htsim_physical_benchmark src/htsim/physical_benchmark.cc)
+   target_link_libraries(htsim_physical_benchmark ncode)
 endif()

@@ -58,6 +58,12 @@ struct TCPHeader {
   uint16_t th_urp; /* urgent pointer */
 };
 
+struct EtherHeader {
+  uint8_t ether_dhost[kEthernetAddressLen];
+  uint8_t ether_shost[kEthernetAddressLen];
+  uint16_t ether_type;
+};
+
 struct UDPHeader {
   uint16_t uh_sport; /* source port */
   uint16_t uh_dport; /* destination port */
