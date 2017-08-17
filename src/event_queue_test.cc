@@ -37,7 +37,7 @@ class DummyConsumer : public EventConsumer {
 
 class EventFixture : public ::testing::Test {
  protected:
-  EventFixture() : queue_(true) {
+  EventFixture() {
     c1_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(5); });
     c2_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(3); });
     c3_ = make_unique<DummyConsumer>(&queue_, [this] { ints_.push_back(2); });
@@ -61,7 +61,7 @@ class EventFixture : public ::testing::Test {
   std::unique_ptr<DummyConsumer> c4_;
   std::unique_ptr<DummyConsumer> c5_;
 
-  RealTimeEventQueue queue_;
+  BusyWaitEventQueue queue_;
   std::vector<int> ints_;
 };
 
@@ -87,8 +87,6 @@ TEST_F(EventFixture, OrderDouble) {
 
 class PeriodicRunnerFixture : public ::testing::Test {
  protected:
-  PeriodicRunnerFixture() : queue_(true) {}
-
   void AddPeriodicConsumer(nanoseconds period, std::function<void()> callback) {
     assert(!consumer_);
     consumer_ = make_unique<DummyConsumer>(&queue_, callback, period);
@@ -97,7 +95,7 @@ class PeriodicRunnerFixture : public ::testing::Test {
 
   void RunFor(milliseconds duration) { queue_.RunAndStopIn(duration); }
 
-  RealTimeEventQueue queue_;
+  BusyWaitEventQueue queue_;
   std::unique_ptr<DummyConsumer> consumer_;
 };
 
