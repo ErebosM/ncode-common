@@ -205,5 +205,5 @@ if (NOT NCODE_DISABLE_BENCHMARKS)
    target_link_libraries(free_list_benchmark ncode)
 
    add_executable(htsim_physical_benchmark src/htsim/physical_benchmark.cc)
-   target_link_libraries(htsim_physical_benchmark ncode)
+   target_link_libraries(htsim_physical_benchmark ncode gflags)
 endif()

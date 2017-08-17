@@ -130,6 +130,18 @@ std::unique_ptr<DemandMatrix> DemandMatrix::Scale(double factor) const {
   return tm;
 }
 
+std::unique_ptr<DemandMatrix> DemandMatrix::RemovePairs(
+    const std::set<NodePair>& pairs) const {
+  std::vector<DemandMatrixElement> new_elements;
+  for (const DemandMatrixElement& element : elements_) {
+    if (!ContainsKey(pairs, std::make_pair(element.src, element.dst))) {
+      new_elements.emplace_back(element);
+    }
+  }
+
+  return make_unique<DemandMatrix>(new_elements, graph_);
+}
+
 std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
   net::Bandwidth max_rate = net::Bandwidth::Zero();
   const DemandMatrixElement* element_ptr = nullptr;
@@ -204,21 +216,23 @@ std::string DemandMatrix::ToString() const {
   for (const auto& link_and_utilization : per_link_utilization) {
     sp_utilizations.emplace_back(*link_and_utilization.second);
   }
-  std::sort(sp_utilizations.begin(), sp_utilizations.end());
+  std::vector<double> sp_utilization_percentiles =
+      Percentiles(&sp_utilizations, 10);
+
+  std::vector<double> demands;
+  for (const auto& element : elements_) {
+    demands.emplace_back(element.demand.Mbps());
+  }
+  std::vector<double> demand_percentiles = Percentiles(&demands, 10);
 
   std::string out;
   nc::StrAppend(
       &out, nc::StrCat("TM with ", static_cast<uint64_t>(elements_.size()),
                        " demands, scale factor ", MaxCommodityScaleFractor(),
-                       " sp link utilizations: ",
-                       nc::Join(sp_utilizations, ","), "\n"));
-
-  for (const auto& element : elements_) {
-    const std::string& src = graph_->GetNode(element.src)->id();
-    const std::string& dst = graph_->GetNode(element.dst)->id();
-
-    out += StrCat("(", src, ",", dst, ") -> ", element.demand.Mbps(), "Mbps\n");
-  }
+                       "\nSP link utilizations: ",
+                       nc::Join(sp_utilization_percentiles, ","),
+                       "\nDemands (in Mbps): ",
+                       nc::Join(demand_percentiles, ","), "\n"));
   return out;
 }
 

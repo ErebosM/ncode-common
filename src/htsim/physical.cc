@@ -66,7 +66,7 @@ PhysicalInterfacePacketHandler::PhysicalInterfacePacketHandler(
   char pcap_errbuf[PCAP_ERRBUF_SIZE];
   pcap_errbuf[0] = '\0';
   pcap_ = pcap_open_live(iface_name.c_str(), 96, 0, 0, pcap_errbuf);
-  CHECK(pcap_errbuf[0] == '\0');
+  CHECK(pcap_errbuf[0] == '\0') << pcap_errbuf;
   CHECK(pcap_ != nullptr);
 
   int link_type = pcap_datalink(pcap_);

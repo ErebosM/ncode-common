@@ -153,9 +153,7 @@ std::chrono::nanoseconds SimTimeEventQueue::TimeToNanos(
       picoseconds(duration.Raw()));
 }
 
-BusyWaitEventQueue::BusyWaitEventQueue() : ticks_per_nano_(CalibrateTicks()) {
-  LOG(ERROR) << ticks_per_nano_;
-}
+BusyWaitEventQueue::BusyWaitEventQueue() : ticks_per_nano_(CalibrateTicks()) {}
 
 std::chrono::nanoseconds BusyWaitEventQueue::TimeToNanos(
     EventQueueTime duration) const {

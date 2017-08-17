@@ -195,7 +195,7 @@ std::map<T, double> SumConvolute(
   std::map<T, double>& current_map = *it;
   ++it;
 
-  for (;it != probabilities.end(); ++it) {
+  for (; it != probabilities.end(); ++it) {
     current_map = SumConvolute(current_map, *it);
   }
 

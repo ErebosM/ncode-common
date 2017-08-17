@@ -102,6 +102,10 @@ class DemandMatrix {
   // demand matrix.
   std::unique_ptr<DemandMatrix> IsolateLargest() const;
 
+  // Removes a set of demands from the matrix.
+  std::unique_ptr<DemandMatrix> RemovePairs(
+      const std::set<NodePair>& pairs) const;
+
   // Prints the matrix.
   std::string ToString() const;
 
