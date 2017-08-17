@@ -1,7 +1,10 @@
 #include "physical.h"
 
-#if defined(linux) || defined(LINUX)
+#if defined(__linux__)
+#include <net/if.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
+#include <string.h>
 #elif defined(__APPLE__)
 #include <ifaddrs.h>
 #include <net/if_dl.h>
@@ -12,15 +15,15 @@
 namespace nc {
 namespace htsim {
 
-#if defined(linux) || defined(LINUX)
-static bool GetMacAddress(char* mac_addr, const char* if_name) {
-  struct ifreq ifinfo;
+#if defined(__linux__)
+static bool GetMacAddress(u_char* mac_addr, const char* if_name) {
+  ifreq ifinfo;
   strcpy(ifinfo.ifr_name, if_name);
   int sd = socket(AF_INET, SOCK_DGRAM, 0);
   int result = ioctl(sd, SIOCGIFHWADDR, &ifinfo);
   close(sd);
 
-  if ((result == 0) && (ifinfo.ifr_hwaddr.sa_family == 1)) {
+  if (result == 0) {
     memcpy(mac_addr, ifinfo.ifr_hwaddr.sa_data, IFHWADDRLEN);
     return true;
   } else {
