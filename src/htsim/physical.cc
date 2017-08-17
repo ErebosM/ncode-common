@@ -119,8 +119,13 @@ void PhysicalInterfacePacketHandler::SendUDP(const UDPPacket& udp_packet) {
       csum(reinterpret_cast<unsigned short*>(sendbuf_ + ll_header_size_),
            (sizeof(pcap::IPHeader) / 2));
 
-  CHECK(pcap_inject(pcap_, sendbuf_, total_len + sizeof(pcap::IPHeader) +
-                                         ll_header_size_) != -1);
+  while (pcap_inject(pcap_, sendbuf_, total_len + sizeof(pcap::IPHeader) +
+                                          ll_header_size_) == -1) {
+    if (errno != 55) {
+      // No buffer space available
+      LOG(FATAL) << pcap_geterr(pcap_) << " error " << errno;
+    }
+  }
 }
 
 void PhysicalInterfacePacketHandler::HandlePacket(PacketPtr pkt) {

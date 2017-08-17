@@ -244,7 +244,18 @@ class EventQueue {
 // An event queue implementation that runs on wallclock time.
 class RealTimeEventQueue : public EventQueue {
  public:
-  RealTimeEventQueue(bool busy_wait) : busy_wait_(busy_wait) {}
+  RealTimeEventQueue() {}
+  EventQueueTime CurrentTime() const override;
+  EventQueueTime NanosToTime(std::chrono::nanoseconds duration) const override;
+  std::chrono::nanoseconds TimeToNanos(EventQueueTime duration) const override;
+
+ protected:
+  void AdvanceTimeTo(EventQueueTime at) override;
+};
+
+class BusyWaitEventQueue : public EventQueue {
+ public:
+  BusyWaitEventQueue();
   EventQueueTime CurrentTime() const override;
   EventQueueTime NanosToTime(std::chrono::nanoseconds duration) const override;
   std::chrono::nanoseconds TimeToNanos(EventQueueTime duration) const override;
@@ -252,9 +263,9 @@ class RealTimeEventQueue : public EventQueue {
  protected:
   void AdvanceTimeTo(EventQueueTime at) override;
 
-  // If true will wait using busy-wait instead of std::thread::sleep, which may
-  // be more accurate.
-  bool busy_wait_;
+ private:
+  // Number of TSC ticks in a nanosecond.
+  double ticks_per_nano_;
 };
 
 // An event queue implementation that runs on simulated time.

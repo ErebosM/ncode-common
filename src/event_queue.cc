@@ -98,6 +98,25 @@ static EventQueueTime CurrentRealTimeFromNanos() {
   return EventQueueTime(duration_nanos.count());
 }
 
+// Assembly code to read the TSC
+static inline uint64_t RDTSC() {
+  unsigned int hi, lo;
+  __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+  return ((uint64_t)hi << 32) | lo;
+}
+
+static double CalibrateTicks() {
+  using namespace std::chrono;
+
+  auto t1 = high_resolution_clock::now();
+  uint64_t begin = RDTSC();
+  std::this_thread::sleep_for(seconds(5));
+  uint64_t end = RDTSC();
+  auto t2 = high_resolution_clock::now();
+  nanoseconds duration = duration_cast<nanoseconds>(t2 - t1);
+  return static_cast<double>(end - begin) / duration.count();
+}
+
 EventQueueTime RealTimeEventQueue::CurrentTime() const {
   return CurrentRealTimeFromNanos();
 }
@@ -113,16 +132,6 @@ std::chrono::nanoseconds RealTimeEventQueue::TimeToNanos(
 }
 
 void RealTimeEventQueue::AdvanceTimeTo(EventQueueTime at) {
-  if (busy_wait_) {
-    while (true) {
-      if (CurrentTime() >= at) {
-        break;
-      }
-    }
-
-    return;
-  }
-
   auto current_time = CurrentTime();
   if (current_time >= at) {
     return;
@@ -142,6 +151,35 @@ std::chrono::nanoseconds SimTimeEventQueue::TimeToNanos(
     EventQueueTime duration) const {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
       picoseconds(duration.Raw()));
+}
+
+BusyWaitEventQueue::BusyWaitEventQueue() : ticks_per_nano_(CalibrateTicks()) {
+  LOG(ERROR) << ticks_per_nano_;
+}
+
+std::chrono::nanoseconds BusyWaitEventQueue::TimeToNanos(
+    EventQueueTime duration) const {
+  return std::chrono::nanoseconds(duration.Raw());
+}
+
+EventQueueTime BusyWaitEventQueue::NanosToTime(
+    std::chrono::nanoseconds duration) const {
+  return EventQueueTime(duration.count());
+}
+
+EventQueueTime BusyWaitEventQueue::CurrentTime() const {
+  uint64_t counter = RDTSC();
+  double nanos = counter / ticks_per_nano_;
+  return EventQueueTime(nanos);
+}
+
+void BusyWaitEventQueue::AdvanceTimeTo(EventQueueTime at) {
+  while (true) {
+    EventQueueTime current_time = CurrentTime();
+    if (current_time >= at) {
+      break;
+    }
+  }
 }
 
 }  // namespace nc
