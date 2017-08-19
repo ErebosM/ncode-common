@@ -335,6 +335,10 @@ struct GraphStats {
   std::vector<size_t> node_out_degree_percentiles;
   std::vector<size_t> node_in_degree_percentiles;
 
+  // Percentiles of the delays of all shortest paths in the network. The max is
+  // the diameter of the network.
+  std::vector<Delay> sp_delay_percentiles;
+
   std::string ToString();
 };
 
@@ -467,6 +471,7 @@ class GraphStorage {
     return GraphLinkSet::FullSetFromStore(link_store_);
   }
 
+  // Returns statistics about the network.
   GraphStats Stats() const;
 
   // Combines LinkOrDie with GetLink for convenience.

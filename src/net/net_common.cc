@@ -13,6 +13,7 @@
 #include <tuple>
 #include <utility>
 
+#include "algorithm.h"
 #include "../map_util.h"
 #include "../substitute.h"
 #include "../stats.h"
@@ -152,6 +153,17 @@ GraphStats GraphStorage::Stats() const {
   std::vector<size_t> all_out_degress;
   AppendValuesFromMap(out_degrees, &all_out_degress);
 
+  std::vector<Delay> all_path_delays;
+  for (GraphNodeIndex src : AllNodes()) {
+    GraphNodeSet destinations = AllNodes();
+    destinations.Remove(src);
+
+    ShortestPath sp(src, destinations, {}, AdjacencyList());
+    for (GraphNodeIndex dst : destinations) {
+      all_path_delays.emplace_back(sp.GetPathDistance(dst));
+    }
+  }
+
   GraphStats to_return;
   to_return.nodes_count = NodeCount();
   to_return.links_count = LinkCount();
@@ -161,6 +173,7 @@ GraphStats GraphStorage::Stats() const {
   to_return.link_delay_percentiles = Percentiles(&all_delays);
   to_return.node_in_degree_percentiles = Percentiles(&all_in_degress);
   to_return.node_out_degree_percentiles = Percentiles(&all_out_degress);
+  to_return.sp_delay_percentiles = Percentiles(&all_path_delays);
 
   return to_return;
 }

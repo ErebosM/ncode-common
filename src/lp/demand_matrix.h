@@ -59,6 +59,8 @@ class DemandMatrix {
   // Per-link utilization, when everything is routed over the shortest path.
   net::GraphLinkMap<double> SPUtilization() const;
 
+  double SPMaxUtilization() const;
+
   // Number of links that, when routing over the SP, will be overloaded.
   size_t OverloadedSPLinkCount() const;
 

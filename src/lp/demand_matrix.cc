@@ -56,6 +56,16 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
   return out;
 }
 
+double DemandMatrix::SPMaxUtilization() const {
+  net::GraphLinkMap<double> sp_utilization  = SPUtilization();
+  double max_utilization = 0;
+  for (const auto& link_and_utilization : sp_utilization) {
+    max_utilization = std::max(max_utilization, *link_and_utilization.second);
+  }
+
+  return max_utilization;
+}
+
 size_t DemandMatrix::OverloadedSPLinkCount() const {
   net::GraphLinkMap<double> link_utilization = SPUtilization();
   size_t i = 0;
