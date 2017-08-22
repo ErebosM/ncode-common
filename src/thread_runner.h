@@ -42,6 +42,40 @@ void RunInParallel(const std::vector<T>& arguments,
   }
 }
 
+template <typename T, typename Result>
+std::vector<std::unique_ptr<Result>> RunInParallelWithResult(
+    const std::vector<T>& arguments,
+    std::function<std::unique_ptr<Result>(const T&)> f, size_t batch = 4) {
+  CHECK(batch > 0) << "Zero batch size";
+
+  std::mutex mu;
+  std::vector<bool> done(arguments.size(), false);
+  std::vector<std::unique_ptr<Result>> results(arguments.size());
+
+  std::vector<std::thread> threads;
+  for (size_t j = 0; j < batch; ++j) {
+    threads.emplace_back([&arguments, &f, &mu, &done, &results] {
+      mu.lock();
+      for (size_t i = 0; i < arguments.size(); ++i) {
+        if (!done[i]) {
+          done[i] = true;
+          mu.unlock();
+          std::unique_ptr<Result> result = f(arguments[i]);
+          results[i] = std::move(result);
+          mu.lock();
+        }
+      }
+      mu.unlock();
+    });
+  }
+
+  for (size_t i = 0; i < batch; ++i) {
+    threads[i].join();
+  }
+
+  return results;
+}
+
 // Runs and maintains a number of threads that process incoming data. Each
 // thread can be associated with an instance of Data.
 template <typename T>

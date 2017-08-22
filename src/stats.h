@@ -129,26 +129,68 @@ class DiscreteDistribution {
   DiscreteDistribution() {}
 
   DiscreteDistribution(const std::vector<T>& values) {
-    std::map<T, double> counts;
     for (T value : values) {
       summary_stats_.Add(value);
-      ++counts[value];
+      ++counts_[value];
     }
-
-    for (auto& value_and_count : counts) {
-      value_and_count.second /= summary_stats_.count();
-    }
-
-    probabilities_ = std::move(counts);
   }
 
-  const std::map<T, double>& probabilities() const { return probabilities_; }
+  void Add(T value, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+      summary_stats_.Add(value);
+    }
+
+    counts_[value] += count;
+  }
+
+  std::map<T, double> Probabilities() const {
+    std::map<T, double> out;
+
+    for (const auto& value_and_count : counts_) {
+      T value = value_and_count.first;
+      double count = value_and_count.second;
+      out[value] = count / summary_stats_.count();
+    }
+
+    return out;
+  }
+
+  // Returns the percentiles of the distribution. Value of ps should be in [0,
+  // 1], and ps should be sorted.
+  T Percentile(double p) const {
+    size_t limit = p * summary_stats_.count();
+    size_t total = 0;
+
+    for (const auto& value_and_count : counts_) {
+      T value = value_and_count.first;
+      uint64_t count = value_and_count.second;
+
+      total += count;
+      if (total >= limit) {
+        return value;
+      }
+    }
+
+    LOG(FATAL) << "Should not happen";
+    return T();
+  }
+
+  // Returns the percentiles of this distribution.
+  std::vector<T> Percentiles(size_t percentile_count = 100) const {
+    std::vector<T> out;
+    for (size_t i = 0; i < percentile_count + 1; ++i) {
+      double p = static_cast<double>(i) / percentile_count;
+      out.emplace_back(Percentile(p));
+    }
+
+    return out;
+  }
 
   const SummaryStats& summary_stats() const { return summary_stats_; }
 
  private:
   SummaryStats summary_stats_;
-  std::map<T, double> probabilities_;
+  std::map<T, uint64_t> counts_;
 };
 
 // Returns the sum of two empirical distributions.
