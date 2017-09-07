@@ -13,7 +13,7 @@ option(NCODE_DEBUG "A debug build" OFF)
 option(NCODE_ASAN "Compile with ASAN on" OFF)
 option(NCODE_TSAN "Compile with TSAN on" OFF)
 
-set(NCODE_BASE_FLAGS "-g -std=c++11 -pedantic-errors -Winit-self -Woverloaded-virtual -Wuninitialized -Wall -Wextra -fno-exceptions")
+set(NCODE_BASE_FLAGS "-g -std=c++11 -pedantic-errors -Winit-self -Woverloaded-virtual -Wuninitialized -Wall -Wextra -fno-exceptions -D_FILE_OFFSET_BITS=64")
 set(NCODE_BASE_LD_FLAGS "")
 if (NCODE_ASAN)
    set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls")

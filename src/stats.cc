@@ -134,10 +134,12 @@ double Empirical2DFunction::Eval(double x) {
   return 0;
 }
 
-void SummaryStats::Add(double value) {
+void SummaryStats::Add(double value) { AddCount(value, 1); }
+
+void SummaryStats::AddCount(double value, size_t count) {
   static double max_add_value =
       std::pow(std::numeric_limits<double>::max(), 0.5);
-  CHECK(value < max_add_value) << "Value too large";
+  CHECK(value * count < max_add_value) << "Value too large";
 
   double value_squared = value * value;
   if ((value_squared < 0.0) == (sum_squared_ < 0.0) &&
@@ -154,9 +156,9 @@ void SummaryStats::Add(double value) {
     max_ = value;
   }
 
-  ++count_;
-  sum_ += value;
-  sum_squared_ += value * value;
+  count_ += count;
+  sum_ += value * count;
+  sum_squared_ += value_squared * count;
 }
 
 void SummaryStats::Reset() {

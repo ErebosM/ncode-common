@@ -50,6 +50,9 @@ class SummaryStats {
 
   void Add(double value);
 
+  // Like calling Add count times.
+  void AddCount(double value, size_t count);
+
   size_t count() const { return count_; };
 
   double mean() const;
@@ -136,10 +139,7 @@ class DiscreteDistribution {
   }
 
   void Add(T value, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-      summary_stats_.Add(value);
-    }
-
+    summary_stats_.AddCount(value, count);
     counts_[value] += count;
   }
 
