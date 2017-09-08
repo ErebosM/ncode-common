@@ -167,7 +167,7 @@ class ThreadBatchProcessor {
   // Number of threads.
   size_t thread_count_;
 
-  bool to_kill_;
+  std::atomic<bool> to_kill_;
 
   // Done status of the current batch.
   std::vector<bool> batch_done_;

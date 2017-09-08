@@ -89,6 +89,11 @@ GraphNodeIndex GraphStorage::NodeFromStringOrDie(const std::string& id) const {
   return FindOrDie(nodes_, id);
 }
 
+const GraphNodeIndex* GraphStorage::NodeFromStringOrNull(
+    const std::string& id) const {
+  return FindOrNull(nodes_, id);
+}
+
 std::string GraphStorage::GetClusterName(const GraphNodeSet& nodes) const {
   if (nodes.Count() == 1) {
     return GetNode(*nodes.begin())->id();
@@ -760,6 +765,52 @@ void GraphBuilder::ScaleDelay(double fraction) {
                            link.dst_port(), link.bandwidth(), new_delay);
   }
   std::swap(links_, new_links);
+}
+
+std::string GraphBuilder::ToRepetita(
+    const std::vector<std::string>& node_order) const {
+  using namespace std::chrono;
+
+  std::string out;
+  std::map<std::string, uint32_t> indices;
+
+  if (node_order.empty()) {
+    std::set<std::string> nodes;
+    for (const auto& link : links_) {
+      nodes.emplace(link.src_id());
+      nodes.emplace(link.dst_id());
+    }
+
+    uint32_t node_count = nodes.size();
+    StrAppend(&out, "NODES ", node_count, "\nlabel x y\n");
+    for (const std::string& node : nodes) {
+      StrAppend(&out, node, " 0 0\n");
+      indices[node] = indices.size();
+    }
+  } else {
+    uint32_t node_count = node_order.size();
+    StrAppend(&out, "NODES ", node_count, "\nlabel x y\n");
+    for (const std::string& node : node_order) {
+      StrAppend(&out, node, " 0 0\n");
+      indices[node] = indices.size();
+    }
+  }
+
+  uint32_t edges_count = links_.size();
+  StrAppend(&out, "\nEDGES ", edges_count,
+            "\nlabel src dest weight bw delay\n");
+  for (uint32_t i = 0; i < links_.size(); ++i) {
+    const auto& link = links_[i];
+    std::string id = StrCat("edge_", i);
+    uint32_t link_src_index = FindOrDie(indices, link.src_id());
+    uint32_t link_dst_index = FindOrDie(indices, link.dst_id());
+    double link_bw_kbps = link.bandwidth().Kbps();
+    microseconds delay = duration_cast<microseconds>(link.delay());
+    SubstituteAndAppend(&out, "$0 $1 $2 0 $3 $4\n", id, link_src_index,
+                        link_dst_index, link_bw_kbps, delay.count());
+  }
+
+  return out;
 }
 
 bool operator==(const GraphLinkBase& a, const GraphLinkBase& b) {

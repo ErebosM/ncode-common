@@ -159,7 +159,7 @@ TEST(Load, Repetita) {
       "edge_10 2 1 10 1000000 10\n"
       "edge_0 0 1 10 1000000 10\n"
       "edge_1 1 0 10 1000000 10\n"
-      "edge_11 1 2 10 1000000 10";
+      "edge_11 1 2 10 1000000 10\n";
 
   std::map<std::string, std::pair<double, double>> locations;
   std::vector<std::string> nodes_in_order;
@@ -182,6 +182,22 @@ TEST(Load, Repetita) {
 
   std::vector<std::string> model = {"0_UNIBRAW_0", "2_KEIO_1", "7_ITB_2"};
   ASSERT_EQ(nodes_in_order, model);
+
+  std::string serialized_back = builder.ToRepetita();
+  LOG(ERROR) << serialized_back;
+  std::string serialized_test_topology =
+      "NODES 3\n"
+      "label x y\n"
+      "0_UNIBRAW_0 0 0\n"
+      "2_KEIO_1 0 0\n"
+      "7_ITB_2 0 0\n"
+      "\n"
+      "EDGES 4\n"
+      "label src dest weight bw delay\n"
+      "edge_0 2 1 0 1000000 10\n"
+      "edge_1 0 1 0 1000000 10\n"
+      "edge_2 1 0 0 1000000 10\n"
+      "edge_3 1 2 0 1000000 10\n";
 }
 
 }  // namespace net

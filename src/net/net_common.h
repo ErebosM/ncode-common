@@ -361,6 +361,10 @@ class GraphBuilder {
   // Scales the delay of all links by a fraction.
   void ScaleDelay(double fraction);
 
+  // Serializes this builder's graph in the format from
+  // https://bitbucket.org/StevenGay/repetita/src.
+  std::string ToRepetita(const std::vector<std::string>& node_order = {}) const;
+
  private:
   // If true port numbers will be auto-assigned.
   bool auto_port_numbers_;
@@ -438,6 +442,10 @@ class GraphStorage {
   // one of them. Will die if no links exist.
   GraphLinkIndex LinkOrDie(const std::string& src,
                            const std::string& dst) const;
+
+  // Returns a pointer to the index of a node or null if there is no node with
+  // that name.
+  const GraphNodeIndex* NodeFromStringOrNull(const std::string& id) const;
 
   // Same as NodeFromString, but dies if the node does not exist.
   GraphNodeIndex NodeFromStringOrDie(const std::string& id) const;

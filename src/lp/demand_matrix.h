@@ -35,7 +35,9 @@ class DemandMatrix {
   using NodePair = std::pair<net::GraphNodeIndex, net::GraphNodeIndex>;
 
   // Loads a TraffixMatrix from a string in the format used by
-  // https://bitbucket.org/StevenGay/repetita/src.
+  // https://bitbucket.org/StevenGay/repetita/src. Will return empty unique
+  // pointer if there is a mismatch between the topology and the TM. Will die if
+  // there is a parsing error.
   static std::unique_ptr<DemandMatrix> LoadRepetitaOrDie(
       const std::string& matrix_string,
       const std::vector<std::string>& node_names,

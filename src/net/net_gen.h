@@ -57,7 +57,7 @@ GraphBuilder GenerateBraess(Bandwidth bw);
 // https://bitbucket.org/StevenGay/repetita/src. The first line of the file is
 // "NODES XX" followed by a comment line and XX lines for each of the nodes in
 // the graph. Each node line is of the format <node_name> <x> <y> where x and y
-// are the x,y coordinates of the nodes. The nodes section is followed by and
+// are the x,y coordinates of the node. The nodes section is followed by and
 // empty line and "EDGES XX" on a new line. A comment line is next, followed by
 // for each edge "<label> <src> <dst> <weight> <bw> <delay>". The bandwidth is
 // in kbps and the delay in microseconds. If the 'node_order' parameter is

@@ -57,7 +57,7 @@ net::GraphLinkMap<double> DemandMatrix::SPUtilization() const {
 }
 
 double DemandMatrix::SPMaxUtilization() const {
-  net::GraphLinkMap<double> sp_utilization  = SPUtilization();
+  net::GraphLinkMap<double> sp_utilization = SPUtilization();
   double max_utilization = 0;
   for (const auto& link_and_utilization : sp_utilization) {
     max_utilization = std::max(max_utilization, *link_and_utilization.second);
@@ -290,10 +290,15 @@ std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaOrDie(
     CHECK(src_index < node_names.size()) << src_index << " line " << *it;
     CHECK(dst_index < node_names.size()) << dst_index << " line " << *it;
 
-    net::GraphNodeIndex src = graph->NodeFromStringOrDie(node_names[src_index]);
-    net::GraphNodeIndex dst = graph->NodeFromStringOrDie(node_names[dst_index]);
+    const net::GraphNodeIndex* src_ptr =
+        graph->NodeFromStringOrNull(node_names[src_index]);
+    const net::GraphNodeIndex* dst_ptr =
+        graph->NodeFromStringOrNull(node_names[dst_index]);
+    if (src_ptr == nullptr || dst_ptr == nullptr) {
+      return {};
+    }
 
-    total_demands[{src, dst}] += demand_kbps;
+    total_demands[{*src_ptr, *dst_ptr}] += demand_kbps;
   }
 
   std::vector<DemandMatrixElement> elements;

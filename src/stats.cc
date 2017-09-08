@@ -139,7 +139,8 @@ void SummaryStats::Add(double value) { AddCount(value, 1); }
 void SummaryStats::AddCount(double value, size_t count) {
   static double max_add_value =
       std::pow(std::numeric_limits<double>::max(), 0.5);
-  CHECK(value * count < max_add_value) << "Value too large";
+  CHECK(value * count < max_add_value) << "Value too large " << value
+                                       << " count " << count;
 
   double value_squared = value * value;
   if ((value_squared < 0.0) == (sum_squared_ < 0.0) &&
