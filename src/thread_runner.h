@@ -7,6 +7,7 @@
 #include <vector>
 #include <condition_variable>
 #include <mutex>
+#include <atomic>
 
 namespace nc {
 
