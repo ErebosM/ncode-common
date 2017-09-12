@@ -365,6 +365,17 @@ class GraphBuilder {
   // https://bitbucket.org/StevenGay/repetita/src.
   std::string ToRepetita(const std::vector<std::string>& node_order = {}) const;
 
+  // Returns the names of all nodes.
+  std::set<std::string> AllNodeNames() const {
+    std::set<std::string> out;
+    for (const auto& link : links_) {
+      out.emplace(link.src_id());
+      out.emplace(link.dst_id());
+    }
+
+    return out;
+  }
+
  private:
   // If true port numbers will be auto-assigned.
   bool auto_port_numbers_;
