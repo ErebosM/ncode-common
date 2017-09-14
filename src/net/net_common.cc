@@ -297,6 +297,22 @@ GraphLinkIndex GraphStorage::LinkOrDie(const std::string& src,
   return GraphLinkIndex(0);
 }
 
+bool GraphStorage::HasLink(const std::string& src,
+                           const std::string& dst) const {
+  CHECK(!src.empty() && !dst.empty()) << "Link source or destination missing";
+  CHECK(src != dst) << "Link source same as destination: " << src;
+  auto it_one = links_.find(src);
+  if (it_one != links_.end()) {
+    auto it_two = it_one->second.find(dst);
+    if (it_two != it_one->second.end()) {
+      CHECK(!it_two->second.empty());
+      return true;
+    }
+  }
+
+  return false;
+}
+
 GraphStorage::GraphStorage(const GraphBuilder& graph_builder) {
   for (const auto& link_base : graph_builder.links()) {
     const std::string& src_id = link_base.src_id();
@@ -312,6 +328,22 @@ GraphStorage::GraphStorage(const GraphBuilder& graph_builder) {
   }
 
   PopulateAdjacencyList();
+}
+
+GraphBuilder GraphStorage::ToBuilder() const {
+  GraphBuilder out;
+  for (const auto& src_and_links : links_) {
+    const std::string& src = src_and_links.first;
+    for (const auto& dst_and_links : src_and_links.second) {
+      const std::string& dst = dst_and_links.first;
+      for (GraphLinkIndex link_index : dst_and_links.second) {
+        const GraphLink* link_ptr = GetLink(link_index);
+        out.AddLink({src, dst, link_ptr->bandwidth(), link_ptr->delay()});
+      }
+    }
+  }
+
+  return out;
 }
 
 bool HasDuplicateLinks(const Links& links) {

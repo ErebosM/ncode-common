@@ -55,6 +55,22 @@ class DemandMatrix {
     CHECK(graph_ != nullptr);
   }
 
+  // Changes the graph a demand matrix is tied to.
+  DemandMatrix(const DemandMatrix& other, const net::GraphStorage* new_graph)
+      : graph_(new_graph) {
+    CHECK(graph_ != nullptr);
+
+    const nc::net::GraphStorage* other_graph = other.graph();
+    for (const auto& element : other.elements()) {
+      const std::string& src_id = other_graph->GetNode(element.src)->id();
+      const std::string& dst_id = other_graph->GetNode(element.dst)->id();
+
+      nc::net::GraphNodeIndex new_src = new_graph->NodeFromStringOrDie(src_id);
+      nc::net::GraphNodeIndex new_dst = new_graph->NodeFromStringOrDie(dst_id);
+      elements_.emplace_back(new_src, new_dst, element.demand);
+    }
+  }
+
   // The elements of this demand matrix.
   const std::vector<DemandMatrixElement>& elements() const { return elements_; }
 

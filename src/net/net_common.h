@@ -438,6 +438,9 @@ class GraphStorage {
  public:
   GraphStorage(const GraphBuilder& graph_builder);
 
+  // Returns a GraphBuilder with the topology.
+  GraphBuilder ToBuilder() const;
+
   // Returns a new GraphStorage, with some nodes from this GraphStorage
   // clustered. Creating clusters may lead to multiple links between two nodes,
   // even if the original graph is simple. This function will also assign names
@@ -498,6 +501,9 @@ class GraphStorage {
                                 const std::string& dst) const {
     return GetLink(LinkOrDie(src, dst));
   }
+
+  // True if there is at least one link between src and dst.
+  bool HasLink(const std::string& src, const std::string& dst) const;
 
   // Node ID to node index.
   const std::map<std::string, GraphNodeIndex>& NodeIdToIndex() const {
