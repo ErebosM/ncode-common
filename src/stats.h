@@ -138,6 +138,13 @@ class DiscreteDistribution {
     }
   }
 
+  // Adds all values from another distribution to this one.
+  void Add(const DiscreteDistribution<T>& other) {
+    for (const auto& value_and_count : other.counts_) {
+      Add(value_and_count.first, value_and_count.second);
+    }
+  }
+
   void Add(T value, size_t count) {
     summary_stats_.AddCount(value, count);
     counts_[value] += count;
@@ -187,6 +194,8 @@ class DiscreteDistribution {
   }
 
   const SummaryStats& summary_stats() const { return summary_stats_; }
+
+  const std::map<T, uint64_t>& counts() const { return counts_; }
 
  private:
   SummaryStats summary_stats_;
