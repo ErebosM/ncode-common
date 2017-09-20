@@ -65,7 +65,7 @@ class Packet {
 
   // Returns the payload (if set) carried by this packet. By default the
   // packet's payload is the same as its size.
-  uint16_t payload_bytes() const { return payload_bytes_; }
+  uint32_t payload_bytes() const { return payload_bytes_; }
 
   // Whether or not this packet should be dropped before any non-preferential
   // drop packets are dropped at queues.
@@ -81,7 +81,7 @@ class Packet {
   void set_ttl(uint8_t ttl) { ttl_ = ttl; }
 
   // Sets the payload.
-  void set_payload(uint16_t payload_bytes) { payload_bytes_ = payload_bytes; }
+  void set_payload(uint32_t payload_bytes) { payload_bytes_ = payload_bytes; }
 
   // Sets preferential dropping for the packet.
   void set_preferential_drop(bool preferential_drop) {
@@ -98,8 +98,20 @@ class Packet {
   // Creates a copy of the packet.
   virtual PacketPtr Duplicate() const = 0;
 
+  PacketPtr DuplicateWithDifferentSize(uint32_t new_size,
+                                       uint32_t new_payload) const {
+    PacketPtr new_ptr = Duplicate();
+    new_ptr->size_bytes_ = new_size;
+    new_ptr->payload_bytes_ = new_payload;
+    return new_ptr;
+  }
+
   // A human-readable description of the contents of the packet.
   virtual std::string ToString() const = 0;
+
+  void AddToQueueingTime(EventQueueTime time) { queueing_time_ += time; }
+
+  EventQueueTime queueing_time() const { return queueing_time_; }
 
  protected:
   Packet(const net::FiveTuple& five_tuple, uint32_t size_bytes,
@@ -112,7 +124,10 @@ class Packet {
   uint8_t ttl_;
   EventQueueTime time_sent_;
   bool preferential_drop_;
-  uint16_t payload_bytes_;
+  uint32_t payload_bytes_;
+
+  // Time spent in queues.
+  EventQueueTime queueing_time_;
 };
 
 // A TCP packet. The same packet object is used for regular TCP packets as for

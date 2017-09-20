@@ -14,7 +14,7 @@
 using namespace nc;
 using namespace std::chrono;
 
-static constexpr size_t kPacketPayloadBytes = 1000;
+static constexpr size_t kPacketPayloadBytes = 100000;
 
 DEFINE_string(iface, "lo0", "Interface to send packets out of");
 DEFINE_double(rate_Mbps, 1000.0, "Rate in Mbps.");
@@ -77,8 +77,9 @@ class FixedRateUDPGen : public EventConsumer {
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  htsim::PhysicalInterfacePacketHandler physical_handler(FLAGS_iface);
   BusyWaitEventQueue event_queue;
+  htsim::PhysicalInterfacePacketHandler physical_handler(FLAGS_iface,
+                                                         &event_queue);
 
   net::FiveTuple five_tuple(
       net::StringToIPOrDie("10.0.0.45"), net::StringToIPOrDie("10.0.0.49"),

@@ -42,6 +42,7 @@ PacketPtr TCPPacket::Duplicate() const {
   new_pkt->ttl_ = ttl_;
   new_pkt->preferential_drop_ = preferential_drop_;
   new_pkt->payload_bytes_ = payload_bytes_;
+  new_pkt->queueing_time_ = queueing_time_;
   new_pkt->flags_ = flags_;
   return std::move(new_pkt);
 }
@@ -65,6 +66,7 @@ PacketPtr UDPPacket::Duplicate() const {
   new_pkt->ttl_ = ttl_;
   new_pkt->preferential_drop_ = preferential_drop_;
   new_pkt->payload_bytes_ = payload_bytes_;
+  new_pkt->queueing_time_ = queueing_time_;
   return std::move(new_pkt);
 }
 

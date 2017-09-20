@@ -1,4 +1,5 @@
 #include "physical.h"
+#include "../strutil.h"
 
 #if defined(__linux__)
 #include <net/if.h>
@@ -53,6 +54,9 @@ static bool GetMacAddress(u_char* mac_addr, const char* if_name) {
 #error no definition for GetMacAddress() on this platform!
 #endif
 
+constexpr std::chrono::microseconds
+    PhysicalInterfacePacketHandler::kTickDuration;
+
 static unsigned short csum(unsigned short* buf, int nwords) {
   unsigned long sum;
   for (sum = 0; nwords > 0; nwords--) sum += *buf++;
@@ -62,7 +66,9 @@ static unsigned short csum(unsigned short* buf, int nwords) {
 }
 
 PhysicalInterfacePacketHandler::PhysicalInterfacePacketHandler(
-    const std::string& iface_name) {
+    const std::string& iface_name, EventQueue* event_queue)
+    : EventConsumer(StrCat("PhysicalInterfaceHandler_", iface_name),
+                    event_queue) {
   char pcap_errbuf[PCAP_ERRBUF_SIZE];
   pcap_errbuf[0] = '\0';
   pcap_ = pcap_open_live(iface_name.c_str(), 96, 0, 0, pcap_errbuf);
@@ -90,6 +96,9 @@ PhysicalInterfacePacketHandler::PhysicalInterfacePacketHandler(
   iph_->ip_hl = 5;
   iph_->ip_v = 4;
   iph_->ip_tos = 0;
+
+  EventQueueTime period = event_queue->ToTime(kTickDuration);
+  EnqueueIn(period);
 }
 
 void PhysicalInterfacePacketHandler::SendUDP(const UDPPacket& udp_packet) {
@@ -132,6 +141,24 @@ void PhysicalInterfacePacketHandler::SendUDP(const UDPPacket& udp_packet) {
 }
 
 void PhysicalInterfacePacketHandler::HandlePacket(PacketPtr pkt) {
+  CHECK(pkt->size_bytes() == pkt->payload_bytes());
+  if (pkt->size_bytes() <= kMTUSizeBytes) {
+    packets_in_batch_.emplace_back(std::move(pkt));
+    return;
+  }
+
+  // If the packet is larger than the MTU size we have to break it up into
+  // smaller packets.
+  uint32_t remainder = pkt->size_bytes();
+  while (remainder > 0) {
+    uint32_t to_send = (remainder < kMTUSizeBytes ? 0 : kMTUSizeBytes);
+    packets_in_batch_.emplace_back(
+        pkt->DuplicateWithDifferentSize(to_send, to_send));
+    remainder -= to_send;
+  }
+}
+
+void PhysicalInterfacePacketHandler::SendPacket(PacketPtr pkt) {
   if (pkt->five_tuple().ip_proto() == net::kProtoUDP) {
     const UDPPacket* udp_packet = static_cast<const UDPPacket*>(pkt.get());
     SendUDP(*udp_packet);
@@ -139,6 +166,16 @@ void PhysicalInterfacePacketHandler::HandlePacket(PacketPtr pkt) {
   }
 
   LOG(FATAL) << "Don't know how to handle IP type " << pkt->ip_id();
+}
+
+void PhysicalInterfacePacketHandler::HandleEvent() {
+  for (auto& packet_ptr : packets_in_batch_) {
+    SendPacket(std::move(packet_ptr));
+  }
+  packets_in_batch_.clear();
+
+  EventQueueTime period = event_queue()->ToTime(kTickDuration);
+  EnqueueIn(period);
 }
 
 }  // namespace htsim

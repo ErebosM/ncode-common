@@ -12,15 +12,26 @@ namespace nc {
 namespace htsim {
 
 // Creates a real-life physical packet for a simulated one and sends it out a
-// given interface.
-class PhysicalInterfacePacketHandler : public PacketHandler {
+// given interface. Packets will not be sent immediately, but on batches because
+// of performance.
+class PhysicalInterfacePacketHandler : public PacketHandler,
+                                       public EventConsumer {
  public:
-  PhysicalInterfacePacketHandler(const std::string& iface_name);
+  static constexpr std::chrono::microseconds kTickDuration =
+      std::chrono::microseconds(100);
+
+  PhysicalInterfacePacketHandler(const std::string& iface_name,
+                                 EventQueue* event_queue);
 
   void HandlePacket(PacketPtr pkt) override;
 
+  void HandleEvent() override;
+
  private:
   static constexpr size_t kSendBufferSize = 2048;
+  static constexpr size_t kMTUSizeBytes = 1000;
+
+  void SendPacket(PacketPtr pkt);
 
   void SendUDP(const UDPPacket& udp_packet);
 
@@ -37,6 +48,9 @@ class PhysicalInterfacePacketHandler : public PacketHandler {
   // instead of the ethernet one. This field gives the size of the link-layer
   // header.
   uint8_t ll_header_size_;
+
+  // Packets in the current batch.
+  std::vector<PacketPtr> packets_in_batch_;
 };
 
 }  // namespace htsim

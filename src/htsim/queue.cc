@@ -91,6 +91,7 @@ void FIFOQueue::HandlePacket(PacketPtr pkt) {
   // being processed.
   EventQueueTime to_wait =
       EventQueueTime(time_per_bit_.Raw() * stats_.queue_size_bytes * 8);
+  pkt->AddToQueueingTime(to_wait);
   time_waiting_.Add(to_wait.Raw());
 
   bool queue_was_empty = queue_.empty();
