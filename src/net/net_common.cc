@@ -471,6 +471,15 @@ bool Walk::IsPath(const GraphStorage& graph_storage) const {
   return !HasDuplicateNodes(links_, graph_storage);
 }
 
+GraphLinkSet Walk::LinkSet() const {
+  GraphLinkSet out;
+  for (nc::net::GraphLinkIndex link : links_) {
+    out.Insert(link);
+  }
+
+  return out;
+}
+
 std::string Walk::ToString(const GraphStorage& storage) const {
   std::stringstream ss;
   ss << "[";

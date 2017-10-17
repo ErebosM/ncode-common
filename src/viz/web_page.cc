@@ -60,6 +60,10 @@ static constexpr char kJQueryValidators[] =
 static constexpr char kD3JS[] =
     "https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js";
 
+JavascriptFuncion JavascriptFuncion::Chain(const JavascriptFuncion& other) {
+  return JavascriptFuncion(StrCat(function_, other.function_));
+}
+
 void HtmlPage::AddOrUpdateHeadElement(const std::string& element_id,
                                       const std::string& element) {
   elements_in_head_[element_id] = element;
@@ -109,6 +113,12 @@ std::string HtmlPage::ConstructHead() const {
                          "charset=\"utf8\" src=\"$0\"></script>",
                          script_location));
   }
+
+  StrAppend(
+      &return_string,
+      Substitute("<script type='text/javascript'>window.onload=function() "
+                 "{$0};</script>",
+                 onload_.raw()));
 
   if (std::find(scripts_.begin(), scripts_.end(), kJQueryUIJS) !=
       scripts_.end()) {
@@ -322,6 +332,10 @@ void AccordionStart(const std::string& title, HtmlPage* out) {
 }
 
 void AccordionEnd(HtmlPage* out) { StrAppend(out->body(), "</div>"); }
+
+void HtmlDiv::ToHTML(HtmlPage* page) const {
+  StrAppend(page->body(), Substitute("<div id='$0'>$1</div>", id_, contents_));
+}
 
 }  // namespace web
 }  // namespace nc

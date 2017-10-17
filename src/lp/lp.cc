@@ -346,7 +346,7 @@ std::unique_ptr<Solution> Problem::Solve(std::chrono::milliseconds time_limit) {
     CHECK(CPXsetdblparam(env, CPX_PARAM_TILIM, time_sec) == 0);
   }
 
-  CHECK(CPXsetintparam(env, CPX_PARAM_LPMETHOD, CPX_ALG_NET) == 0);
+  //  CHECK(CPXsetintparam(env, CPX_PARAM_LPMETHOD, CPX_ALG_NET) == 0);
   auto start_time = std::chrono::high_resolution_clock::now();
 
   int status;

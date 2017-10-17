@@ -287,6 +287,9 @@ class Walk {
   // The list of links.
   const Links& links() const { return links_; }
 
+  // The set of links in the path.
+  GraphLinkSet LinkSet() const;
+
   // String representation in the form [A:p1->B:p2, B:p3->C:p3]
   std::string ToString(const GraphStorage& storage) const;
 

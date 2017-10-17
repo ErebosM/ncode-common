@@ -1,0 +1,96 @@
+<div id="grid_{{grid_id}}"></div>
+
+<script type='text/javascript'>
+function grid_{{grid_id}}_init_function() {
+"use strict";
+
+function ColCount(data, row_index) {
+	return data[row_index].length;
+}
+
+function RowCount(data, col_index) {
+  var count = 0;
+  var row_count = data.length;
+  for (var row_index = 0; row_index < row_count; ++row_index) {
+  	if (data[row_index].length > col_index) {
+    	count = row_index + 1;
+    }
+  }
+  
+  return count;
+}
+
+function GetColor(f) {
+    var color_scale = d3.scale.linear();
+    color_scale.range([0, 255]);
+    var red = Math.floor(color_scale(f));
+    var blue = 0;
+    var green = 255 - red;
+    return "rgb(" + red + "," + green + "," + blue + ")";
+}
+
+var data = {{grid_data}};
+var row_labels = {{grid_row_labels}};
+var col_labels = {{grid_col_labels}};
+
+var square_side = 50;
+var side_label_x_offset = 5;
+var side_label_y_offset = 5;
+
+var grid = d3.select("#grid_{{grid_id}}")
+    .append("svg")
+    .attr("width","510px")
+    .attr("height","510px"); 
+    
+var row = grid.selectAll(".row")
+    .data(data)
+    .enter().append("g")
+    .attr("class", "row");
+    
+var cells = row.selectAll(".square")
+    .data(function(d, row_index) { 
+      var new_data = [];
+      var arrayLength = d.length;
+			for (var i = 0; i < arrayLength; i++) {
+			    new_data.push([d[i], row_index]);
+			}
+    	return new_data; 
+    })
+    .enter().append("svg");
+    
+ cells.append("rect")
+    .attr("class","square")
+    .attr("x", function(d, col_index) { return col_index * square_side; })
+    .attr("y", function(d) { return d[1] * square_side; })
+    .attr("width", function(d) { return square_side; })
+    .attr("height", function(d) { return square_side; })
+    .style("fill", function(d) { return GetColor(d[0]['color_saturation']); })
+    .style("stroke", "#222");
+    
+cells.append("text").text(function(d) {return d[0]['value'];})
+  .attr("x", function(d, col_index) { return col_index * square_side + square_side / 2; })
+  .attr("y", function(d) { return d[1] * square_side + square_side / 2; })
+  .attr("dy", "0.5em")
+  .attr("text-anchor", "middle");
+    
+ var row_labels = grid.selectAll(".row_label")
+    .data(row_labels)
+    .enter().append("text")
+    .attr("x", function(d, i) { return ColCount(data, i) * square_side + side_label_x_offset;})
+    .attr("y", function(d, i) { return i * square_side + square_side / 2;})
+    .attr("dy", "0.5em")
+    .text(function(d) {return d;});
+    
+ var col_labels = grid.selectAll(".col_label")
+    .data(col_labels)
+    .enter().append("text")
+    .attr("x", function(d, i) { return i * square_side + square_side / 2 + side_label_x_offset;})
+    .attr("dy", "0.5em")
+    .attr("y", function(d, i) { return RowCount(data, i) * square_side + side_label_y_offset})
+    .text(function(d) {return d;})
+    .attr("transform", function(d) { 
+      var elt = d3.select(this);
+      return "rotate(90," + elt.attr("x") + "," + elt.attr("y") + ")";
+    });
+}
+</script>

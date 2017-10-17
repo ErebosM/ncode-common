@@ -12,6 +12,25 @@
 namespace nc {
 namespace viz {
 
+// A javascript function.
+class JavascriptFuncion {
+ public:
+  // By default the function does nothing.
+  JavascriptFuncion() {}
+
+  explicit JavascriptFuncion(const std::string& function)
+      : function_(function) {}
+
+  const std::string raw() const { return function_; }
+
+  // Returns a new function that executes this function and then another one.
+  JavascriptFuncion Chain(const JavascriptFuncion& other);
+
+ private:
+  // The function, as it will be rendered on the web page.
+  std::string function_;
+};
+
 // A generic web page.
 class HtmlPage {
  public:
@@ -33,6 +52,11 @@ class HtmlPage {
 
   // Adds a CSS to the head of the page.
   void AddStyle(const std::string& location);
+
+  // Adds a function to be executed when the page loads.
+  void AddOnLoadFunction(const JavascriptFuncion& function) {
+    onload_ = onload_.Chain(function);
+  }
 
   // Constructs a string with the HTML contents of the web page.
   virtual std::string Construct() const;
@@ -69,7 +93,27 @@ class HtmlPage {
   // Stylesheets in the head section.
   std::vector<std::string> stylesheets_;
 
+  // Function to be called on window load.
+  JavascriptFuncion onload_;
+
   DISALLOW_COPY_AND_ASSIGN(HtmlPage);
+};
+
+// An HTML div element.
+class HtmlDiv {
+ public:
+  HtmlDiv(const std::string& id, const std::string& contents)
+      : id_(id), contents_(contents) {}
+
+  // Gets a javascript function that updates the div with new contents.
+  JavascriptFuncion GetUpdateFunction(const std::string& new_contents) const;
+
+  // Renders on a page.
+  void ToHTML(HtmlPage* page) const;
+
+ private:
+  std::string id_;
+  std::string contents_;
 };
 
 // Renders an html table on an HtmlPage.

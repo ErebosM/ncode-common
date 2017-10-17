@@ -135,8 +135,8 @@ set_target_properties(ctemplate PROPERTIES COMPILE_FLAGS
                       "-Wno-unused-parameter -Wno-unused-const-variable -Wno-sign-compare -Wno-unused-private-field")
 
 # Visualization and HTML
-set(WEB_HEADER_FILES src/viz/web_page.h src/viz/graph.h src/viz/grapher.h src/viz/server.h)
-add_library(ncode_viz OBJECT src/viz/web_page.cc src/viz/graph.cc src/viz/grapher.cc src/viz/server.cc ${PROJECT_BINARY_DIR}/www_resources.c ${PROJECT_BINARY_DIR}/grapher_resources.c ${WEB_HEADER_FILES})
+set(VIZ_HEADER_FILES src/viz/web_page.h src/viz/graph.h src/viz/grapher.h src/viz/server.h src/viz/square_grid.h)
+add_library(ncode_viz OBJECT src/viz/web_page.cc src/viz/graph.cc src/viz/grapher.cc src/viz/server.cc src/viz/square_grid.cc ${PROJECT_BINARY_DIR}/www_resources.c ${PROJECT_BINARY_DIR}/grapher_resources.c ${VIZ_HEADER_FILES})
 
 # LP optimization
 set(LP_HEADER_FILES src/lp/lp.h src/lp/mc_flow.h src/lp/demand_matrix.h)
@@ -174,6 +174,7 @@ if (NOT NCODE_DISABLE_TESTS)
    add_test_exec(net_graph_query_test src/net/graph_query_test.cc ncode)
 
    add_test_exec(web_page_test src/viz/web_page_test.cc ncode)
+   add_test_exec(square_grid_test src/viz/square_grid_test.cc ncode)
    add_test_exec(graph_test src/viz/graph_test.cc ncode)
    add_test_exec(grapher_test src/viz/grapher_test.cc ncode)
    add_test_exec(server_test src/viz/server_test.cc ncode)
