@@ -551,6 +551,26 @@ GraphNodeIndex Walk::LastHop(const GraphStorage& storage) const {
   return storage.GetLink(last_link)->dst();
 }
 
+GraphLinkSet Walk::BottleneckLinks(const GraphStorage& storage,
+                                   nc::net::Bandwidth* bandwidth) const {
+  GraphLinkSet out;
+  nc::net::Bandwidth min_bandwidth = nc::net::Bandwidth::Max();
+  for (GraphLinkIndex link : links_) {
+    const GraphLink* link_ptr = storage.GetLink(link);
+    nc::net::Bandwidth link_bw = link_ptr->bandwidth();
+    if (link_bw < min_bandwidth) {
+      if (bandwidth != nullptr) {
+        *bandwidth = link_bw;
+      }
+
+      out.Clear();
+      out.Insert(link);
+    } else if (link_bw == min_bandwidth) {
+      out.Insert(link);
+    }
+  }
+}
+
 size_t Walk::InMemBytesEstimate() const {
   return links_.capacity() * sizeof(Links::value_type) + sizeof(*this);
 }

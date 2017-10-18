@@ -306,6 +306,12 @@ class Walk {
   // Id of the last node along the path.
   GraphNodeIndex LastHop(const GraphStorage& storage) const;
 
+  // Returns the link(s) with the smallest bandwidth along the path. If the
+  // optional bandwidth argument is specified will populate it with the
+  // bandwidth of the links.
+  GraphLinkSet BottleneckLinks(const GraphStorage& storage,
+                               nc::net::Bandwidth* bandwidth = nullptr) const;
+
   // Rough estimate of the number of bytes of memory this Walk uses.
   size_t InMemBytesEstimate() const;
 
