@@ -146,7 +146,8 @@ class GraphLinkBase {
         dst_port_(dst_port),
         bandwidth_(bw),
         delay_(delay) {
-    CHECK(delay_ != Delay::zero()) << "Link has zero delay";
+    CHECK(delay_ != Delay::zero()) << "Link has zero delay " << src << "->"
+                                   << dst;
     CHECK(bandwidth_ != Bandwidth::Zero()) << "Link has zero bandwidth";
   }
 
