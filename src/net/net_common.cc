@@ -569,6 +569,8 @@ GraphLinkSet Walk::BottleneckLinks(const GraphStorage& storage,
       out.Insert(link);
     }
   }
+
+  return out;
 }
 
 size_t Walk::InMemBytesEstimate() const {
