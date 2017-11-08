@@ -176,7 +176,13 @@ class GraphLinkBase {
 
   friend bool operator==(const GraphLinkBase& a, const GraphLinkBase& b);
 
-  void AddToBandwidth(Bandwidth bw) { bandwidth_ += bw; }
+  void AddToBandwidth(Bandwidth bw) {
+    Bandwidth bw_before = bandwidth_;
+    bandwidth_ += bw;
+    if (bw_before > bandwidth_) {
+      bandwidth_ = Bandwidth::Max();
+    }
+  }
 
  private:
   std::string src_id_;
