@@ -33,6 +33,35 @@ void Bin(size_t bin_size, std::vector<std::pair<double, double>>* data) {
   data->resize(bin_index);
 }
 
+void Bin(size_t bin_size, std::vector<double>* data) {
+  CHECK(bin_size != 0);
+  if (bin_size == 1) {
+    return;
+  }
+
+  double bin_total = 0;
+  size_t bin_index = 0;
+  for (size_t i = 0; i < data->size(); ++i) {
+    if (i != 0 && i % bin_size == 0) {
+      double mean = bin_total / bin_size;
+      (*data)[bin_index++] = mean;
+      bin_total = 0;
+    }
+
+    bin_total += (*data)[i];
+  }
+
+  size_t remainder = data->size() % bin_size;
+  if (remainder == 0) {
+    data->resize(bin_index);
+    return;
+  }
+
+  double mean = bin_total / remainder;
+  (*data)[bin_index++] = mean;
+  data->resize(bin_index);
+}
+
 static double LinearInterpolate(double x0, double y0, double x1, double y1,
                                 double x) {
   double a = (y1 - y0) / (x1 - x0);

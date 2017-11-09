@@ -43,6 +43,10 @@ std::vector<T> Percentiles(std::vector<T>* values, size_t n = 100) {
 // and the y value will be the mean of all y values in the bin.
 void Bin(size_t bin_size, std::vector<std::pair<double, double>>* data);
 
+// Like above, but for a 1D data. Each bin's value will be the mean within the
+// bin.
+void Bin(size_t bin_size, std::vector<double>* data);
+
 // Basic statistics about a series of numbers.
 class SummaryStats {
  public:
