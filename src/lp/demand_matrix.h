@@ -100,13 +100,14 @@ class DemandMatrix {
   // the network, and scale_factor is a number by which all demands can be
   // multiplied to get to max flow.
   std::pair<net::Bandwidth, double> GetMaxFlow(
-      const net::GraphLinkSet& to_exclude) const;
+      const net::GraphLinkSet& to_exclude, double capacity_multiplier) const;
 
   // True if demand can be routed through the network.
-  bool IsFeasible(const net::GraphLinkSet& to_exclude) const;
+  bool IsFeasible(const net::GraphLinkSet& to_exclude,
+                  double capacity_multiplier) const;
 
   // Returns the max commodity scale factor for this matrix.
-  double MaxCommodityScaleFractor() const;
+  double MaxCommodityScaleFractor(double capacity_multiplier) const;
 
   // Returns true if the demand matrix is resilient to any single link failure
   // (the load can still fit).

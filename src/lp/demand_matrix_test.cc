@@ -85,7 +85,7 @@ TEST_F(TmGenTest, HalfTwo) {
   ASSERT_TRUE(LinkLoadEq({0.6, 0.8}, *matrix));
 
   // 0.8 * 1.25 is 1.0
-  ASSERT_NEAR(1.25, matrix->MaxCommodityScaleFractor(), 0.01);
+  ASSERT_NEAR(1.25, matrix->MaxCommodityScaleFractor(1.0), 0.01);
 }
 
 // Same as before, but we only have 2 links, test to make sure 0.6 only affects

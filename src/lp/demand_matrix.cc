@@ -168,14 +168,16 @@ std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
 }
 
 static net::GraphLinkMap<double> GetCapacities(
-    const net::GraphLinkSet& to_exclude, const net::GraphStorage& graph) {
+    const net::GraphLinkSet& to_exclude, double capacity_multiplier,
+    const net::GraphStorage& graph) {
   net::GraphLinkMap<double> out;
   for (net::GraphLinkIndex link : graph.AllLinks()) {
     if (to_exclude.Contains(link)) {
       continue;
     }
 
-    double capacity = graph.GetLink(link)->bandwidth().Mbps();
+    double capacity =
+        graph.GetLink(link)->bandwidth().Mbps() * capacity_multiplier;
     out[link] = capacity;
   }
 
@@ -183,9 +185,9 @@ static net::GraphLinkMap<double> GetCapacities(
 }
 
 std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
-    const net::GraphLinkSet& to_exclude) const {
+    const net::GraphLinkSet& to_exclude, double capacity_multiplier) const {
   MaxFlowSingleCommodityFlowProblem max_flow_problem(
-      GetCapacities(to_exclude, *graph_), graph_);
+      GetCapacities(to_exclude, capacity_multiplier, *graph_), graph_);
   for (const DemandMatrixElement& element : elements_) {
     max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
   }
@@ -196,9 +198,10 @@ std::pair<net::Bandwidth, double> DemandMatrix::GetMaxFlow(
                         max_flow_problem.MaxDemandScaleFactor());
 }
 
-bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude) const {
+bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude,
+                              double capacity_multiplier) const {
   MaxFlowSingleCommodityFlowProblem max_flow_problem(
-      GetCapacities(to_exclude, *graph_), graph_);
+      GetCapacities(to_exclude, capacity_multiplier, *graph_), graph_);
   for (const DemandMatrixElement& element : elements_) {
     max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
   }
@@ -206,13 +209,14 @@ bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude) const {
   return max_flow_problem.IsFeasible();
 }
 
-double DemandMatrix::MaxCommodityScaleFractor() const {
-  return GetMaxFlow({}).second;
+double DemandMatrix::MaxCommodityScaleFractor(
+    double link_capacity_multiplier) const {
+  return GetMaxFlow({}, link_capacity_multiplier).second;
 }
 
 bool DemandMatrix::ResilientToFailures() const {
   for (net::GraphLinkIndex link : graph_->AllLinks()) {
-    if (!IsFeasible({link})) {
+    if (!IsFeasible({link}, 1.0)) {
       return false;
     }
   }
@@ -238,7 +242,7 @@ std::string DemandMatrix::ToString() const {
   std::string out;
   nc::StrAppend(
       &out, nc::StrCat("TM with ", static_cast<uint64_t>(elements_.size()),
-                       " demands, scale factor ", MaxCommodityScaleFractor(),
+                       " demands, scale factor ", MaxCommodityScaleFractor(1.0),
                        "\nSP link utilizations: ",
                        nc::Join(sp_utilization_percentiles, ","),
                        "\nDemands (in Mbps): ",
@@ -420,12 +424,12 @@ std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(
     }
 
     matrix = matrix->Scale(scale);
-    if (!matrix->IsFeasible({})) {
+    if (!matrix->IsFeasible({}, 1.0)) {
       LOG(INFO) << "Try " << i << ": not feasible after scaling";
       continue;
     }
 
-    double scale_factor = matrix->MaxCommodityScaleFractor();
+    double scale_factor = matrix->MaxCommodityScaleFractor(1.0);
     CHECK(scale_factor < 10.0);
     if (scale_factor < min_scale_factor_) {
       LOG(INFO) << "Try " << i << ": scale factor too low";
