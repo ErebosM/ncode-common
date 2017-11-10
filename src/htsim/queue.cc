@@ -54,6 +54,7 @@ void Pipe::HandlePacket(PacketPtr pkt) {
   }
 
   uint32_t size_bytes = pkt->size_bytes();
+  pkt->AddToPropagationTime(delay_);
   queue_.emplace_back(event_queue()->CurrentTime() + delay_, std::move(pkt));
   stats_.bytes_in_flight += size_bytes;
   stats_.pkts_in_flight += 1;

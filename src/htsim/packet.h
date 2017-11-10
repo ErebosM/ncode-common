@@ -110,8 +110,10 @@ class Packet {
   virtual std::string ToString() const = 0;
 
   void AddToQueueingTime(EventQueueTime time) { queueing_time_ += time; }
+  void AddToPropagationTime(EventQueueTime time) { propagation_time_ += time; }
 
   EventQueueTime queueing_time() const { return queueing_time_; }
+  EventQueueTime propagation_time() const { return propagation_time_; }
 
  protected:
   Packet(const net::FiveTuple& five_tuple, uint32_t size_bytes,
@@ -128,6 +130,9 @@ class Packet {
 
   // Time spent in queues.
   EventQueueTime queueing_time_;
+
+  // Time spend traversing links.
+  EventQueueTime propagation_time_;
 };
 
 // A TCP packet. The same packet object is used for regular TCP packets as for

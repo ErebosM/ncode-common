@@ -234,7 +234,7 @@ size_t InputChannel::ConsumeMessage(std::vector<char>::const_iterator from,
   header_and_message->buffer = std::move(to_offload);
   header_and_message->header_offset = header_size;
   incoming_->ProduceOrBlock(std::move(header_and_message));
-  return 0;
+  return total_size;
 }
 
 bool InputChannel::ReadFromSocket() {
@@ -246,6 +246,7 @@ bool InputChannel::ReadFromSocket() {
     char* header_ptr = header_and_message_.data();
     ssize_t bytes_read = read(socket_, header_ptr + current_size, kReadChunk);
     if (bytes_read < 0) {
+      header_and_message_.resize(current_size);
       if (errno == EWOULDBLOCK) {
         break;
       }
@@ -255,9 +256,13 @@ bool InputChannel::ReadFromSocket() {
     }
 
     if (bytes_read == 0) {
+      header_and_message_.resize(current_size);
       closed = true;
       break;
     }
+
+    // In case there were less than kReadChunk bytes in the socket buffer.
+    header_and_message_.resize(current_size + bytes_read);
   }
 
   size_t offset = 0;
