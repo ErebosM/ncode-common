@@ -96,6 +96,10 @@ class DemandMatrix {
   // capacity when all demands are routed over their shortest paths.
   double SPGlobalUtilization() const;
 
+  // Returns true if the demand matrix can be satisfied by routing each demand
+  // on its shortest path.
+  bool IsTriviallySatisfiable() const;
+
   // Returns <max_flow, scale_factor>, where max flow is the max flow through
   // the network, and scale_factor is a number by which all demands can be
   // multiplied to get to max flow.

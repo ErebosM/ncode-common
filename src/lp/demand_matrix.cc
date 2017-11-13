@@ -130,6 +130,18 @@ double DemandMatrix::SPGlobalUtilization() const {
   return total_load / total_capacity;
 }
 
+bool DemandMatrix::IsTriviallySatisfiable() const {
+  net::GraphLinkMap<double> sp_utilizaiton = SPUtilization();
+  for (const auto& link_and_utilization : sp_utilizaiton) {
+    double utilization = *(link_and_utilization.second);
+    if (utilization > 1.0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 std::unique_ptr<DemandMatrix> DemandMatrix::Scale(double factor) const {
   auto tm = make_unique<DemandMatrix>(elements_, graph_);
   for (auto& element : tm->elements_) {

@@ -132,14 +132,14 @@ milliseconds SinglePassSingleConstraint(const net::GraphStorage& storage,
   std::vector<const net::Walk*> paths;
   std::vector<std::unique_ptr<net::Walk>> all_paths;
 
-  Paths(src_node, dst_node, [&all_paths](std::unique_ptr<net::Walk> walk) {
-    all_paths.emplace_back(std::move(walk));
-  }, storage, constraints);
-  std::sort(all_paths.begin(), all_paths.end(),
-            [](const std::unique_ptr<net::Walk>& lhs,
-               const std::unique_ptr<net::Walk>& rhs) {
-              return lhs->delay() < rhs->delay();
-            });
+  //  Paths(src_node, dst_node, [&all_paths](std::unique_ptr<net::Walk> walk) {
+  //    all_paths.emplace_back(std::move(walk));
+  //  }, storage, constraints);
+  //  std::sort(all_paths.begin(), all_paths.end(),
+  //            [](const std::unique_ptr<net::Walk>& lhs,
+  //               const std::unique_ptr<net::Walk>& rhs) {
+  //              return lhs->delay() < rhs->delay();
+  //            });
 
   auto start = high_resolution_clock::now();
   net::KShortestPathsGenerator ksp(src_node, dst_node, storage, constraints);
@@ -150,6 +150,8 @@ milliseconds SinglePassSingleConstraint(const net::GraphStorage& storage,
     }
   }
   auto end = high_resolution_clock::now();
+  LOG(ERROR) << duration_cast<milliseconds>(end - start).count();
+  exit(1);
 
   LOG(ERROR) << ksp.GetStats().ToString();
 

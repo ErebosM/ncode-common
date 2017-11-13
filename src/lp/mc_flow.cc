@@ -216,8 +216,10 @@ SingleCommodityFlowProblem::RecoverPathsFromSolution(
       capacities_for_destination[link_index] = flow_over_link;
       flow_exiting_sources[link->src()] += flow_over_link;
       flow_exiting_sources[link->dst()] -= flow_over_link;
+      //      LOG(INFO) << link->ToStringNoPorts() << " -> " << flow_over_link;
     }
 
+    //    LOG(INFO) << "demands to " << graph_->GetNode(dst)->id();
     SingleCommoditySingleSinkFlowProblem sub_problem(capacities_for_destination,
                                                      dst, graph_);
     for (const auto& src_and_load : sources_and_loads) {
@@ -225,6 +227,8 @@ SingleCommodityFlowProblem::RecoverPathsFromSolution(
       double flow_out = flow_exiting_sources.GetValueOrDie(src);
       double demand = src_and_load.second == 0 ? flow_out : src_and_load.second;
       sub_problem.AddDemand(src, demand);
+      //      LOG(INFO) << "from " << graph_->GetNode(src)->id() << " demand "
+      //                << demand;
     }
 
     net::GraphNodeMap<std::vector<FlowAndPath>> paths_in_sub_problem =
@@ -561,6 +565,7 @@ SingleCommoditySingleSinkFlowProblem::GetShortestPaths() {
 
   problem.SetMatrix(problem_matrix);
   std::unique_ptr<Solution> solution = problem.Solve();
+  //  LOG(INFO) << "SUB " << solution->type();
   if (solution->type() != lp::OPTIMAL && solution->type() != lp::FEASIBLE) {
     return {};
   }
@@ -575,7 +580,6 @@ bool MaxFlowSingleCommodityFlowProblem::GetMaxFlow(
   VarMap link_to_variables =
       GetLinkToVariableMap(&problem, &problem_matrix, true);
   AddFlowConservationConstraints(link_to_variables, &problem, &problem_matrix);
-
   for (const auto& dst_index_and_demands : demands_) {
     net::GraphNodeIndex dst_index = dst_index_and_demands.first;
     const std::vector<SrcAndLoad>& demands = *dst_index_and_demands.second;
@@ -618,6 +622,7 @@ bool MaxFlowSingleCommodityFlowProblem::GetMaxFlow(
     return false;
   }
 
+  //  LOG(INFO) << "flow " << solution->ObjectiveValue();
   *max_flow = solution->ObjectiveValue();
   if (paths == nullptr) {
     return true;
