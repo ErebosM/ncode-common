@@ -1,13 +1,14 @@
 #include "demand_matrix.h"
 
-#include <functional>
-#include <set>
+#include <chrono>
+#include <cmath>
+#include <iterator>
+#include <tuple>
 
 #include "../map_util.h"
-#include "../logging.h"
 #include "../perfect_hash.h"
-#include "../net/algorithm.h"
-#include "lp.h"
+#include "../stats.h"
+#include "../strutil.h"
 #include "mc_flow.h"
 
 namespace nc {
@@ -152,16 +153,25 @@ std::unique_ptr<DemandMatrix> DemandMatrix::Scale(double factor) const {
   return tm;
 }
 
-std::unique_ptr<DemandMatrix> DemandMatrix::RemovePairs(
-    const std::set<NodePair>& pairs) const {
+std::unique_ptr<DemandMatrix> DemandMatrix::Filter(
+    std::function<bool(const DemandMatrixElement& element)> filter) const {
   std::vector<DemandMatrixElement> new_elements;
   for (const DemandMatrixElement& element : elements_) {
-    if (!ContainsKey(pairs, std::make_pair(element.src, element.dst))) {
-      new_elements.emplace_back(element);
+    if (filter(element)) {
+      continue;
     }
+
+    new_elements.emplace_back(element);
   }
 
   return make_unique<DemandMatrix>(new_elements, graph_);
+}
+
+std::unique_ptr<DemandMatrix> DemandMatrix::RemovePairs(
+    const std::set<NodePair>& pairs) const {
+  return Filter([&pairs](const DemandMatrixElement& element) {
+    return ContainsKey(pairs, std::make_pair(element.src, element.dst));
+  });
 }
 
 std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
@@ -364,305 +374,84 @@ std::string DemandMatrix::ToRepetita(
   return out;
 }
 
-void DemandGenerator::AddUtilizationConstraint(double fraction,
-                                               double utilization) {
-  CHECK(utilization >= 0.0);
-  CHECK(fraction >= 0.0);
-  CHECK(fraction <= 1.0);
-  utilization_constraints_.emplace_back(fraction, utilization);
-}
-
-void DemandGenerator::AddHopCountLocalityConstraint(double fraction,
-                                                    size_t hop_count) {
-  CHECK(hop_count > 0);
-  CHECK(fraction >= 0.0);
-  locality_hop_constraints_.emplace_back(fraction, hop_count);
-}
-
-void DemandGenerator::AddDistanceLocalityConstraint(
-    double fraction, std::chrono::milliseconds distance) {
-  CHECK(distance > std::chrono::milliseconds::zero());
-  CHECK(fraction >= 0.0);
-  locality_delay_constraints_.emplace_back(fraction, distance);
-}
-
-void DemandGenerator::AddOutgoingFractionConstraint(double fraction,
-                                                    double out_fraction) {
-  CHECK(fraction >= 0);
-  CHECK(out_fraction >= 0);
-  outgoing_fraction_constraints_.emplace_back(fraction, out_fraction);
-  std::sort(outgoing_fraction_constraints_.begin(),
-            outgoing_fraction_constraints_.end(),
-            std::greater<FractionAndOutgoingFraction>());
-
-  for (size_t i = 0; i < outgoing_fraction_constraints_.size() - 1; ++i) {
-    CHECK(outgoing_fraction_constraints_[i].second >=
-          outgoing_fraction_constraints_[i + 1].second);
-  }
-}
-
-static void AddLocalityConstraint(
-    const std::vector<std::vector<lp::VariableIndex>>& vars,
-    const std::vector<lp::VariableIndex>& all_variables, double fraction,
-    size_t limit, lp::Problem* problem,
-    std::vector<lp::ProblemMatrixElement>* problem_matrix) {
-  // The constraint says that all paths of 'limit' or more need to receive
-  // 'fraction' of the total load.
-  std::set<lp::VariableIndex> affected_vars;
-  for (size_t i = limit - 1; i < vars.size(); ++i) {
-    affected_vars.insert(vars[i].begin(), vars[i].end());
-  }
-
-  lp::ConstraintIndex sum_constraint = problem->AddConstraint();
-  problem->SetConstraintRange(sum_constraint, 0, lp::Problem::kInifinity);
-  for (lp::VariableIndex ie_variable : all_variables) {
-    bool affected = ContainsKey(affected_vars, ie_variable);
-    double coefficient = affected ? 1 - fraction : -fraction;
-    problem_matrix->emplace_back(sum_constraint, ie_variable, coefficient);
-  }
-}
-
-std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrix(
-    size_t tries, double scale,
-    std::function<double(const DemandMatrix&)> cost_function) {
-  double max_cost = 0;
-  double sf = 0;
-  std::unique_ptr<DemandMatrix> best_matrix;
-  for (size_t i = 0; i < tries; ++i) {
-    auto matrix = GenerateMatrixPrivate();
-    if (!matrix) {
-      LOG(INFO) << "Try " << i << ": unable to generate";
-      continue;
-    }
-
-    matrix = matrix->Scale(scale);
-    if (!matrix->IsFeasible({}, 1.0)) {
-      LOG(INFO) << "Try " << i << ": not feasible after scaling";
-      continue;
-    }
-
-    double scale_factor = matrix->MaxCommodityScaleFractor(1.0);
-    CHECK(scale_factor < 10.0);
-    if (scale_factor < min_scale_factor_) {
-      LOG(INFO) << "Try " << i << ": scale factor too low";
-      continue;
-    }
-
-    size_t overloaded_link_count = matrix->OverloadedSPLinkCount();
-    if (overloaded_link_count < min_overloaded_link_count_) {
-      LOG(INFO) << "Try " << i << ": overloaded link count too low " << i
-                << " vs " << min_overloaded_link_count_;
-      continue;
-    }
-
-    double cost = cost_function(*matrix);
-    if (cost > max_cost) {
-      max_cost = cost;
-      sf = scale_factor;
-      best_matrix = std::move(matrix);
-    }
-  }
-
-  LOG(INFO) << "Picked matrix with cost " << max_cost << " scale factor " << sf;
-  return best_matrix;
-}
-
-std::unique_ptr<DemandMatrix> DemandGenerator::GenerateMatrixPrivate() {
-  using namespace net;
-  using namespace std::chrono;
-
-  // The adjacency map.
-  const GraphNodeMap<std::vector<net::AdjacencyList::LinkInfo>>& adjacencies =
-      graph_->AdjacencyList().Adjacencies();
-
-  GraphLinkSet all_links = graph_->AllLinks();
-  lp::Problem problem(lp::MAXIMIZE);
-  std::vector<lp::ProblemMatrixElement> problem_matrix;
-
-  // First need to create a variable for each of the N^2 possible pairs, will
-  // also compute for each link the pairs on whose shortest path the link is.
-  // Will also group pairs based on hop count.
-  GraphNodeSet all_nodes = graph_->AllNodes();
-  std::map<std::pair<GraphNodeIndex, GraphNodeIndex>, lp::VariableIndex>
-      ie_pair_to_variable;
-
-  // The n-th element in this vector contains the variables for all pairs whose
-  // shortest paths have length of n + 1 milliseconds.
-  std::vector<std::vector<lp::VariableIndex>> by_ms_count;
-
-  // The n-th element in this vector contains the variables for all pairs whose
-  // shortest paths have length of n + 1 hops.
-  std::vector<std::vector<lp::VariableIndex>> by_hop_count;
-
-  // All variables.
-  std::vector<lp::VariableIndex> ordered_variables;
-
-  // For each ie-pair (variable) the total load that the source can emit. This
-  // is the sum of the capacities of all links going out of the source. This is
-  // redundant -- the value will be the same for all src, but it is convenient.
-  std::map<lp::VariableIndex, double> variable_to_total_out_capacity;
-
-  GraphLinkMap<std::vector<lp::VariableIndex>> link_to_variables;
-  for (GraphNodeIndex src : all_nodes) {
-    double total_out = 0;
-
-    if (adjacencies.HasValue(src)) {
-      for (const auto& adjacency : adjacencies.GetValueOrDie(src)) {
-        GraphLinkIndex adj_link_index = adjacency.link_index;
-        total_out += graph_->GetLink(adj_link_index)->bandwidth().Mbps();
-      }
-    }
-
-    ShortestPath sp(src, all_nodes, {}, graph_->AdjacencyList(), nullptr,
-                    nullptr);
-    for (GraphNodeIndex dst : all_nodes) {
+DemandGenerator::DemandGenerator(const net::GraphStorage* graph, uint64_t seed)
+    : rnd_(seed),
+      sp_({}, graph->AdjacencyList(), nullptr, nullptr),
+      graph_(graph),
+      sum_inverse_delays_squared_(0) {
+  for (nc::net::GraphNodeIndex src : graph_->AllNodes()) {
+    for (nc::net::GraphNodeIndex dst : graph_->AllNodes()) {
       if (src == dst) {
         continue;
       }
 
-      lp::VariableIndex new_variable = problem.AddVariable();
-      problem.SetVariableRange(new_variable, 0, lp::Problem::kInifinity);
-      ie_pair_to_variable[{src, dst}] = new_variable;
-      std::unique_ptr<Walk> shortest_path = sp.GetPath(dst);
+      double distance = sp_.GetDistance(src, dst).count();
+      sum_inverse_delays_squared_ += std::pow(1.0 / distance, 2);
+    }
+  }
+}
 
-      size_t ms_count =
-          duration_cast<milliseconds>(shortest_path->delay()).count() + 1;
-      by_ms_count.resize(std::max(by_ms_count.size(), ms_count));
-      by_ms_count[ms_count - 1].emplace_back(new_variable);
+std::unique_ptr<DemandMatrix> DemandGenerator::SinglePass(
+    double locality, nc::net::Bandwidth mean) {
+  // Will start by getting the total incoming/outgoing traffic at each node.
+  // These will come from an exponential distribution with the given mean.
+  std::exponential_distribution<double> dist(1.0 / mean.Mbps());
+  nc::net::GraphNodeMap<double> incoming_traffic_Mbps;
+  nc::net::GraphNodeMap<double> outgoing_traffic_Mbps;
+  double total_Mbps = 0;
+  double sum_in = 0;
+  double sum_out = 0;
+  for (nc::net::GraphNodeIndex node : graph_->AllNodes()) {
+    double in = dist(rnd_);
+    double out = dist(rnd_);
+    incoming_traffic_Mbps[node] = in;
+    outgoing_traffic_Mbps[node] = out;
+    total_Mbps += in + out;
+    sum_in += in;
+    sum_out += out;
+  }
+  double sum_product = sum_in * sum_out;
 
-      size_t hop_count = shortest_path->size();
-      CHECK(hop_count > 0);
-      by_hop_count.resize(std::max(by_hop_count.size(), hop_count));
-      by_hop_count[hop_count - 1].emplace_back(new_variable);
-
-      variable_to_total_out_capacity[new_variable] = total_out;
-      ordered_variables.emplace_back(new_variable);
-      for (GraphLinkIndex link : shortest_path->links()) {
-        link_to_variables[link].emplace_back(new_variable);
+  // Time to compute the demand for each aggregate.
+  double total_p = 0;
+  std::vector<DemandMatrixElement> elements;
+  for (nc::net::GraphNodeIndex src : graph_->AllNodes()) {
+    for (nc::net::GraphNodeIndex dst : graph_->AllNodes()) {
+      double gravity_p = (1 - locality) *
+                         incoming_traffic_Mbps.GetValueOrDie(src) *
+                         outgoing_traffic_Mbps.GetValueOrDie(dst) / sum_product;
+      if (src == dst) {
+        total_p += gravity_p;
+        continue;
       }
+
+      double distance = sp_.GetDistance(src, dst).count();
+      double locality_p =
+          locality / (distance * distance * sum_inverse_delays_squared_);
+
+      double value_Mbps = (locality_p + gravity_p) * total_Mbps;
+      total_p += locality_p + gravity_p;
+      elements.push_back(
+          {src, dst, nc::net::Bandwidth::FromMBitsPerSecond(value_Mbps)});
     }
   }
+  CHECK(std::abs(total_p - 1.0) < 0.0001) << "Not a distribution " << total_p;
 
-  std::vector<GraphLinkIndex> ordered_links;
-  for (GraphLinkIndex link_index : all_links) {
-    ordered_links.emplace_back(link_index);
-  }
-
-  std::shuffle(ordered_links.begin(), ordered_links.end(), rnd_);
-  std::shuffle(ordered_variables.begin(), ordered_variables.end(), rnd_);
-
-  for (const FractionAndUtilization& utilization_constraint :
-       utilization_constraints_) {
-    double fraction = utilization_constraint.first;
-    size_t index_to = fraction * ordered_links.size();
-
-    for (size_t i = 0; i < index_to; ++i) {
-      GraphLinkIndex link_index = ordered_links[i];
-      lp::ConstraintIndex set_constraint = problem.AddConstraint();
-      Bandwidth link_capacity = graph_->GetLink(link_index)->bandwidth();
-      problem.SetConstraintRange(
-          set_constraint, 0,
-          utilization_constraint.second * link_capacity.Mbps());
-
-      for (lp::VariableIndex ie_variable : link_to_variables[link_index]) {
-        problem_matrix.emplace_back(set_constraint, ie_variable, 1.0);
-      }
-    }
-  }
-
-  for (const auto& node_pair_and_variable : ie_pair_to_variable) {
-    lp::VariableIndex variable = node_pair_and_variable.second;
-    problem.SetObjectiveCoefficient(variable, 1.0);
-  }
-
-  for (const FractionAndHopCount& locality_constraint :
-       locality_hop_constraints_) {
-    double fraction = locality_constraint.first;
-    size_t hop_count = locality_constraint.second;
-    AddLocalityConstraint(by_hop_count, ordered_variables, fraction, hop_count,
-                          &problem, &problem_matrix);
-  }
-
-  for (const FractionAndDistance& locality_constraint :
-       locality_delay_constraints_) {
-    double fraction = locality_constraint.first;
-    std::chrono::milliseconds distance = locality_constraint.second;
-    AddLocalityConstraint(by_ms_count, ordered_variables, fraction,
-                          distance.count(), &problem, &problem_matrix);
-  }
-
-  // To enforce the global utilization constraint will have to collect for all
-  // links the total load they see from all variables.
-  double total_capacity = 0;
-  std::map<lp::VariableIndex, double> variable_to_coefficient;
-  for (net::GraphLinkIndex link_index : graph_->AllLinks()) {
-    Bandwidth link_capacity = graph_->GetLink(link_index)->bandwidth();
-    total_capacity += link_capacity.Mbps();
-    for (lp::VariableIndex ie_variable : link_to_variables[link_index]) {
-      variable_to_coefficient[ie_variable] += 1.0;
-    }
-  }
-
-  lp::ConstraintIndex gu_constraint = problem.AddConstraint();
-  problem.SetConstraintRange(gu_constraint, 0,
-                             max_global_utilization_ * total_capacity);
-  for (const auto& variable_and_coefficient : variable_to_coefficient) {
-    lp::VariableIndex var = variable_and_coefficient.first;
-    double coefficient = variable_and_coefficient.second;
-    problem_matrix.emplace_back(gu_constraint, var, coefficient);
-  }
-
-  for (const FractionAndOutgoingFraction& out_fraction_constraint :
-       outgoing_fraction_constraints_) {
-    double fraction = out_fraction_constraint.first;
-    size_t index_to = fraction * ordered_variables.size();
-
-    for (size_t i = 0; i < index_to; ++i) {
-      lp::VariableIndex variable = ordered_variables[i];
-      lp::ConstraintIndex out_constraint = problem.AddConstraint();
-
-      double out_from_variable = variable_to_total_out_capacity[variable];
-      double limit = out_fraction_constraint.second;
-
-      problem.SetConstraintRange(out_constraint, 0, limit * out_from_variable);
-      problem_matrix.emplace_back(out_constraint, variable, 1);
-    }
-  }
-
-  problem.SetMatrix(problem_matrix);
-  std::unique_ptr<lp::Solution> solution = problem.Solve();
-  if (solution->type() == lp::INFEASIBLE_OR_UNBOUNDED) {
-    return {};
-  }
-
-  std::vector<DemandMatrixElement> out;
-  for (const auto& node_pair_and_variable : ie_pair_to_variable) {
-    const std::pair<GraphNodeIndex, GraphNodeIndex>& ie_pair =
-        node_pair_and_variable.first;
-    lp::VariableIndex variable = node_pair_and_variable.second;
-    double value = solution->VariableValue(variable);
-    if (value > 0) {
-      out.emplace_back(ie_pair.first, ie_pair.second,
-                       net::Bandwidth::FromMBitsPerSecond(value));
-    }
-  }
-
-  return make_unique<DemandMatrix>(std::move(out), graph_);
+  return nc::make_unique<DemandMatrix>(elements, graph_);
 }
 
-void DemandGenerator::SetMaxGlobalUtilization(double fraction) {
-  CHECK(fraction > 0.0);
-  CHECK(fraction < 1.0);
-  max_global_utilization_ = fraction;
-}
+std::unique_ptr<DemandMatrix> DemandGenerator::Generate(
+    double commodity_scale_factor, double locality) {
+  CHECK(commodity_scale_factor >= 1.0);
+  CHECK(locality >= 0);
+  CHECK(locality <= 1);
 
-void DemandGenerator::SetMinScaleFactor(double factor) {
-  CHECK(factor >= 1.0);
-  min_scale_factor_ = factor;
-}
-
-void DemandGenerator::SetMinOverloadedLinkCount(size_t link_count) {
-  min_overloaded_link_count_ = link_count;
+  auto tm = SinglePass(locality, nc::net::Bandwidth::FromMBitsPerSecond(1));
+  double csf = tm->MaxCommodityScaleFractor(1.0);
+  CHECK(csf != 0);
+  tm = tm->Scale(csf);
+  tm = tm->Scale(1.0 / commodity_scale_factor);
+  return tm;
 }
 
 }  // namespace lp

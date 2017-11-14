@@ -3,16 +3,18 @@
 
 #include <stddef.h>
 #include <algorithm>
-#include <chrono>
 #include <cstdint>
-#include <limits>
 #include <map>
 #include <memory>
 #include <random>
+#include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "../common.h"
+#include "../logging.h"
+#include "../net/algorithm.h"
 #include "../net/net_common.h"
 
 namespace nc {
@@ -123,6 +125,10 @@ class DemandMatrix {
   // scaled by 'factor'.
   std::unique_ptr<DemandMatrix> Scale(double factor) const;
 
+  // Removes all aggregates for which a filter function returns true.
+  std::unique_ptr<DemandMatrix> Filter(
+      std::function<bool(const DemandMatrixElement& element)> filter) const;
+
   // Returns a demand matrix that contains only the largest demand from this
   // demand matrix.
   std::unique_ptr<DemandMatrix> IsolateLargest() const;
@@ -147,85 +153,38 @@ class DemandMatrix {
   DISALLOW_COPY_AND_ASSIGN(DemandMatrix);
 };
 
-// A class that generates demand matrices based on a set of constraints.
+// Generates a DemandMatrix using a scheme based on Roughan's '93 CCR paper. The
+// method there is extended to support geographic locality.
 class DemandGenerator {
  public:
-  DemandGenerator(uint64_t seed, net::GraphStorage* graph)
-      : graph_(graph),
-        max_global_utilization_(std::numeric_limits<double>::max()),
-        rnd_(seed),
-        min_scale_factor_(1.0),
-        min_overloaded_link_count_(1) {}
+  DemandGenerator(const net::GraphStorage* graph, uint64_t seed);
 
-  // Adds a constraint that makes 'fraction' of all links have utilization less
-  // than or equal to 'utilization' when demands are routed over their shortest
-  // paths.
-  void AddUtilizationConstraint(double fraction, double utilization);
+  // Produces a demand matrix. The matrix is not guaranteed to the satisfiable.
+  std::unique_ptr<DemandMatrix> SinglePass(double locality,
+                                           nc::net::Bandwidth mean);
 
-  // Adds a constraint that makes 'fraction' of all load go over ie pairs whose
-  // shortest paths are hop count or longer.
-  void AddHopCountLocalityConstraint(double fraction, size_t hop_count);
-
-  // Adds a constraint that makes 'fraction' of all load go over ie pairs whose
-  // shortest paths are distance delay or longer.
-  void AddDistanceLocalityConstraint(double fraction,
-                                     std::chrono::milliseconds delay);
-
-  // Sets the max global utilization.
-  void SetMaxGlobalUtilization(double fraction);
-
-  void SetMinScaleFactor(double factor);
-
-  void SetMinOverloadedLinkCount(size_t link_count);
-
-  // Adds a constraint that makes 'fraction' of all demands use up to
-  // 'out_fraction' of their respective total outgoing capacity.
-  void AddOutgoingFractionConstraint(double fraction, double out_fraction);
-
-  // Generates a matrix. Will generate num_tries matrices and pick the one with
-  // the highest cost. The matrix will be scaled by the scale
-  // argument after generation (but this function guarantees that it will return
-  // a feasible matrix).
-  std::unique_ptr<DemandMatrix> GenerateMatrix(
-      size_t num_tries, double scale,
-      std::function<double(const DemandMatrix&)> cost_function);
+  // Returns a random matrix with the given commodity scale factor. Will
+  // repeatedly call SinglePass to generate a series of matrices with the
+  // highest mean rate that the commodity scale factor allows.
+  std::unique_ptr<DemandMatrix> Generate(double commodity_scale_factor,
+                                         double locality);
 
  private:
-  // Called by GenerateMatrix to generate a single matrix, if the matrix does
-  // not satisfy the global utilization constraint it is discarded and this
-  // function is called again.
-  std::unique_ptr<DemandMatrix> GenerateMatrixPrivate();
+  static constexpr size_t kPassCount = 10;
 
-  // The graph.
-  net::GraphStorage* graph_;
-
-  // Define the overall distribution of link utilizations.
-  using FractionAndUtilization = std::pair<double, double>;
-  std::vector<FractionAndUtilization> utilization_constraints_;
-
-  using FractionAndDistance = std::pair<double, std::chrono::milliseconds>;
-  std::vector<FractionAndDistance> locality_delay_constraints_;
-
-  using FractionAndHopCount = std::pair<double, size_t>;
-  std::vector<FractionAndHopCount> locality_hop_constraints_;
-
-  using FractionAndOutgoingFraction = std::pair<double, double>;
-  std::vector<FractionAndOutgoingFraction> outgoing_fraction_constraints_;
-
-  // The sum of all load that crosses all links divided by the sum of all link
-  // capacities will be less than this number.
-  double max_global_utilization_;
-
-  // Randomness is needed when links are shuffled before solving the problem.
+  // Randomness.
   std::mt19937 rnd_;
 
-  // All demands in the generated matrix should be scaleable by at least this
-  // much, while keeping the matrix feasible.
-  double min_scale_factor_;
+  // For the locality constraints will also need the delays of the N*(N-1)
+  // shortest paths in the graph.
+  nc::net::AllPairShortestPath sp_;
 
-  // Minimum number of links that should be overloaded when routing over the
-  // shortest path.
-  size_t min_overloaded_link_count_;
+  // The graph.
+  const net::GraphStorage* graph_;
+
+  // Sum of 1 / D_i where D_i is the delay of the shortest path of the i-th
+  // IE-pair
+  double sum_inverse_delays_squared_;
 
   DISALLOW_COPY_AND_ASSIGN(DemandGenerator);
 };
