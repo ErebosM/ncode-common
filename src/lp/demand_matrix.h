@@ -115,6 +115,11 @@ class DemandMatrix {
   // Returns the max commodity scale factor for this matrix.
   double MaxCommodityScaleFractor(double capacity_multiplier) const;
 
+  // Approximates the max commodity scale factor only using the top N demands
+  // that are responsible for 'fraction_limit' of all demand.
+  double ApproximateMaxCommodityScaleFractor(double capacity_multiplier,
+                                             double fraction_limit) const;
+
   // Returns true if the demand matrix is resilient to any single link failure
   // (the load can still fit).
   bool ResilientToFailures() const;
@@ -128,6 +133,10 @@ class DemandMatrix {
   // Removes all aggregates for which a filter function returns true.
   std::unique_ptr<DemandMatrix> Filter(
       std::function<bool(const DemandMatrixElement& element)> filter) const;
+
+  // Returns a demand matrix that contains the top N demands that are
+  // responsible for 'fraction' of the total demand.
+  std::unique_ptr<DemandMatrix> IsolateFraction(double fraction) const;
 
   // Returns a demand matrix that contains only the largest demand from this
   // demand matrix.

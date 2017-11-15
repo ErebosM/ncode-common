@@ -174,6 +174,33 @@ std::unique_ptr<DemandMatrix> DemandMatrix::RemovePairs(
   });
 }
 
+std::unique_ptr<DemandMatrix> DemandMatrix::IsolateFraction(
+    double fraction) const {
+  CHECK(fraction > 0);
+  CHECK(fraction <= 1);
+  nc::net::Bandwidth limit = TotalLoad() * fraction;
+
+  std::vector<DemandMatrixElement> new_elements = elements_;
+  std::sort(new_elements.begin(), new_elements.end(),
+            [](const DemandMatrixElement& lhs, const DemandMatrixElement& rhs) {
+              return lhs.demand > rhs.demand;
+            });
+
+  size_t i;
+  nc::net::Bandwidth total = nc::net::Bandwidth::Zero();
+  for (i = 0; i < new_elements.size(); ++i) {
+    total += new_elements[i].demand;
+    if (total > limit) {
+      break;
+    }
+  }
+
+  CHECK(i <= new_elements.size());
+  size_t diff = new_elements.size() - i;
+  new_elements.erase(std::prev(new_elements.end(), diff), new_elements.end());
+  return make_unique<DemandMatrix>(new_elements, graph_);
+}
+
 std::unique_ptr<DemandMatrix> DemandMatrix::IsolateLargest() const {
   net::Bandwidth max_rate = net::Bandwidth::Zero();
   const DemandMatrixElement* element_ptr = nullptr;
@@ -234,6 +261,12 @@ bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude,
 double DemandMatrix::MaxCommodityScaleFractor(
     double link_capacity_multiplier) const {
   return GetMaxFlow({}, link_capacity_multiplier).second;
+}
+
+double DemandMatrix::ApproximateMaxCommodityScaleFractor(
+    double capacity_multiplier, double fraction_limit) const {
+  return IsolateFraction(fraction_limit)
+      ->MaxCommodityScaleFractor(capacity_multiplier);
 }
 
 bool DemandMatrix::ResilientToFailures() const {
@@ -447,7 +480,7 @@ std::unique_ptr<DemandMatrix> DemandGenerator::Generate(
 
   auto tm =
       SinglePass(locality, nc::net::Bandwidth::FromMBitsPerSecond(1), rnd);
-  double csf = tm->MaxCommodityScaleFractor(1.0);
+  double csf = tm->ApproximateMaxCommodityScaleFractor(1.0, 0.99);
   CHECK(csf != 0);
   tm = tm->Scale(csf);
   tm = tm->Scale(1.0 / commodity_scale_factor);
