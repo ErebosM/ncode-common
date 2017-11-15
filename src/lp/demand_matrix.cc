@@ -374,9 +374,8 @@ std::string DemandMatrix::ToRepetita(
   return out;
 }
 
-DemandGenerator::DemandGenerator(const net::GraphStorage* graph, uint64_t seed)
-    : rnd_(seed),
-      sp_({}, graph->AdjacencyList(), nullptr, nullptr),
+DemandGenerator::DemandGenerator(const net::GraphStorage* graph)
+    : sp_({}, graph->AdjacencyList(), nullptr, nullptr),
       graph_(graph),
       sum_inverse_delays_squared_(0) {
   for (nc::net::GraphNodeIndex src : graph_->AllNodes()) {
@@ -392,7 +391,7 @@ DemandGenerator::DemandGenerator(const net::GraphStorage* graph, uint64_t seed)
 }
 
 std::unique_ptr<DemandMatrix> DemandGenerator::SinglePass(
-    double locality, nc::net::Bandwidth mean) {
+    double locality, nc::net::Bandwidth mean, std::mt19937* rnd) const {
   // Will start by getting the total incoming/outgoing traffic at each node.
   // These will come from an exponential distribution with the given mean.
   std::exponential_distribution<double> dist(1.0 / mean.Mbps());
@@ -402,8 +401,8 @@ std::unique_ptr<DemandMatrix> DemandGenerator::SinglePass(
   double sum_in = 0;
   double sum_out = 0;
   for (nc::net::GraphNodeIndex node : graph_->AllNodes()) {
-    double in = dist(rnd_);
-    double out = dist(rnd_);
+    double in = dist(*rnd);
+    double out = dist(*rnd);
     incoming_traffic_Mbps[node] = in;
     outgoing_traffic_Mbps[node] = out;
     total_Mbps += in + out;
@@ -441,12 +440,13 @@ std::unique_ptr<DemandMatrix> DemandGenerator::SinglePass(
 }
 
 std::unique_ptr<DemandMatrix> DemandGenerator::Generate(
-    double commodity_scale_factor, double locality) {
+    double commodity_scale_factor, double locality, std::mt19937* rnd) const {
   CHECK(commodity_scale_factor >= 1.0);
   CHECK(locality >= 0);
   CHECK(locality <= 1);
 
-  auto tm = SinglePass(locality, nc::net::Bandwidth::FromMBitsPerSecond(1));
+  auto tm =
+      SinglePass(locality, nc::net::Bandwidth::FromMBitsPerSecond(1), rnd);
   double csf = tm->MaxCommodityScaleFractor(1.0);
   CHECK(csf != 0);
   tm = tm->Scale(csf);

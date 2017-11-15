@@ -157,24 +157,21 @@ class DemandMatrix {
 // method there is extended to support geographic locality.
 class DemandGenerator {
  public:
-  DemandGenerator(const net::GraphStorage* graph, uint64_t seed);
+  DemandGenerator(const net::GraphStorage* graph);
 
   // Produces a demand matrix. The matrix is not guaranteed to the satisfiable.
   std::unique_ptr<DemandMatrix> SinglePass(double locality,
-                                           nc::net::Bandwidth mean);
+                                           nc::net::Bandwidth mean,
+                                           std::mt19937* rnd) const;
 
   // Returns a random matrix with the given commodity scale factor. Will
   // repeatedly call SinglePass to generate a series of matrices with the
   // highest mean rate that the commodity scale factor allows.
   std::unique_ptr<DemandMatrix> Generate(double commodity_scale_factor,
-                                         double locality);
+                                         double locality,
+                                         std::mt19937* rnd) const;
 
  private:
-  static constexpr size_t kPassCount = 10;
-
-  // Randomness.
-  std::mt19937 rnd_;
-
   // For the locality constraints will also need the delays of the N*(N-1)
   // shortest paths in the graph.
   nc::net::AllPairShortestPath sp_;
