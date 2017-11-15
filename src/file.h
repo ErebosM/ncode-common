@@ -53,6 +53,10 @@ class File {
   // returns 'file'.
   static std::string ExtractFileName(const std::string& file_location);
 
+  // Extracts the directory name from a given location so that
+  // '/some/random/file' returns '/some/random/'.
+  static std::string ExtractDirectoryName(const std::string& file_location);
+
   // If 'name' is a file returns true and sets 'directory' to false. If it is
   // directory it sets 'directory' to true. If it is neither returns false.
   static bool FileOrDirectory(const std::string& name, bool* directory);

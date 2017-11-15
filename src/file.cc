@@ -111,6 +111,16 @@ std::string File::ExtractFileName(const std::string& file_location) {
   return pieces.back();
 }
 
+std::string File::ExtractDirectoryName(const std::string& file_location) {
+  std::vector<std::string> pieces = Split(file_location, "/", true);
+  CHECK(pieces.size() > 0);
+
+  std::string out;
+  nc::Join(pieces.begin(), std::next(pieces.begin(), pieces.size() - 1), "/",
+           &out);
+  return out;
+}
+
 std::string File::ReadFileToStringOrDie(const std::string& name) {
   std::string output;
   CHECK(ReadFileToString(name, &output)) << "Could not read: " << name
