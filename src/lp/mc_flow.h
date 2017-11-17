@@ -64,44 +64,11 @@ class FlowProblem {
   net::GraphLinkMap<double> link_capacities_;
 
   AdjacencyMap adjacency_map_;
-
-  DISALLOW_COPY_AND_ASSIGN(FlowProblem);
 };
 
-// Computes the maximum flow through a network.
-class MaxFlowProblem : public FlowProblem {
- public:
-  MaxFlowProblem(const net::GraphLinkMap<double>& link_capacities,
-                 const net::GraphStorage* graph);
-
-  // Adds a source and a sink. The maximum flow will be the total possible from
-  // from all sources to all sinks.
-  void AddSourceAndSink(net::GraphNodeIndex source, net::GraphNodeIndex sink);
-
-  // Populates the maximum flow (in the same units as link_capacities given upon
-  // construction) for all commodities.
-  bool GetMaxFlow(double* max_flow);
-
- private:
-  // For each link an LP variable.
-  using VarMap = net::GraphLinkMap<VariableIndex>;
-
-  // Returns a map from a graph link to a list of one variable per demand
-  // destination.
-  VarMap GetLinkToVariableMap(
-      Problem* problem, std::vector<ProblemMatrixElement>* problem_matrix);
-
-  // Adds flow conservation constraints to the problem.
-  void AddFlowConservationConstraints(
-      const VarMap& link_to_variables, Problem* problem,
-      std::vector<ProblemMatrixElement>* problem_matrix);
-
-  net::GraphNodeSet sources_;
-  net::GraphNodeSet sinks_;
-  net::GraphNodeMap<net::GraphNodeIndex> src_to_sink_;
-};
-
-// A single-commodity flow problem.
+// A single-commodity flow problem. Edge capacities will be taken from the
+// bandwidth values of the links in the graph this object is constructed with
+// times a multiplier.
 class SingleCommodityFlowProblem : public FlowProblem {
  public:
   // For each link a map from destination node index to LP variable.
@@ -110,19 +77,25 @@ class SingleCommodityFlowProblem : public FlowProblem {
   SingleCommodityFlowProblem(const net::GraphLinkMap<double>& link_capacities,
                              const net::GraphStorage* graph);
 
-  // Adds demand to the network, with a given source and sink.
+  // Adds demand to the network, with a given source and sink. If
+  // the demand is not specified it is assumed to be infinite.
+  void AddDemand(const std::string& source, const std::string& sink,
+                 double demand = 0);
   void AddDemand(net::GraphNodeIndex source, net::GraphNodeIndex sink,
-                 double demand);
+                 double demand = 0);
 
-  // Returns true if the problem is feasible---if the demands can fit in the
-  // network.
+  // Returns true if the MC problem is feasible -- if the commodities/demands
+  // can fit in the network.
   bool IsFeasible();
 
-  // The maximum number all demands in the problem can be multiplied with, while
-  // retaining feasibility. If the problem is feasible this number will be >= 1.
-  // If the problem is infeasible will return the smallest number all demands
-  // need to be multiplied with to make the problem feasible.
+  // If all commodities' demands are multiplied by the returned number the
+  // problem will be close to being infeasible. Returns 0 if the problem is
+  // currently infeasible or all commodities have 0 demands.
   double MaxDemandScaleFactor();
+
+  // If the returned demand is added to all commodities the problem will be very
+  // close to being infeasible.
+  double MaxDemandIncrement();
 
  protected:
   // Returns a map from a graph link to a list of one variable per demand
