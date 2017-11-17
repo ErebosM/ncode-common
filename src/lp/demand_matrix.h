@@ -113,12 +113,8 @@ class DemandMatrix {
                   double capacity_multiplier) const;
 
   // Returns the max commodity scale factor for this matrix.
-  double MaxCommodityScaleFractor(double capacity_multiplier) const;
-
-  // Approximates the max commodity scale factor only using the top N demands
-  // that are responsible for 'fraction_limit' of all demand.
-  double ApproximateMaxCommodityScaleFractor(double capacity_multiplier,
-                                             double fraction_limit) const;
+  double MaxCommodityScaleFractor(const net::GraphLinkSet& to_exclude,
+                                  double capacity_multiplier) const;
 
   // Returns true if the demand matrix is resilient to any single link failure
   // (the load can still fit).

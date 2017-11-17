@@ -259,14 +259,9 @@ bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude,
 }
 
 double DemandMatrix::MaxCommodityScaleFractor(
+    const net::GraphLinkSet& to_exclude,
     double link_capacity_multiplier) const {
-  return GetMaxFlow({}, link_capacity_multiplier).second;
-}
-
-double DemandMatrix::ApproximateMaxCommodityScaleFractor(
-    double capacity_multiplier, double fraction_limit) const {
-  return IsolateFraction(fraction_limit)
-      ->MaxCommodityScaleFractor(capacity_multiplier);
+  return GetMaxFlow(to_exclude, link_capacity_multiplier).second;
 }
 
 bool DemandMatrix::ResilientToFailures() const {
@@ -296,12 +291,12 @@ std::string DemandMatrix::ToString() const {
 
   std::string out;
   nc::StrAppend(
-      &out, nc::StrCat("TM with ", static_cast<uint64_t>(elements_.size()),
-                       " demands, scale factor ", MaxCommodityScaleFractor(1.0),
-                       "\nSP link utilizations: ",
-                       nc::Join(sp_utilization_percentiles, ","),
-                       "\nDemands (in Mbps): ",
-                       nc::Join(demand_percentiles, ","), "\n"));
+      &out,
+      nc::StrCat(
+          "TM with ", static_cast<uint64_t>(elements_.size()),
+          " demands, scale factor ", MaxCommodityScaleFractor({}, 1.0),
+          "\nSP link utilizations: ", nc::Join(sp_utilization_percentiles, ","),
+          "\nDemands (in Mbps): ", nc::Join(demand_percentiles, ","), "\n"));
   return out;
 }
 
@@ -463,8 +458,10 @@ std::unique_ptr<DemandMatrix> DemandGenerator::SinglePass(
 
       double value_Mbps = (locality_p + gravity_p) * total_Mbps;
       total_p += locality_p + gravity_p;
-      elements.push_back(
-          {src, dst, nc::net::Bandwidth::FromMBitsPerSecond(value_Mbps)});
+      auto bw = nc::net::Bandwidth::FromMBitsPerSecond(value_Mbps);
+      if (bw > nc::net::Bandwidth::Zero()) {
+        elements.push_back({src, dst, bw});
+      }
     }
   }
   CHECK(std::abs(total_p - 1.0) < 0.0001) << "Not a distribution " << total_p;
@@ -480,7 +477,7 @@ std::unique_ptr<DemandMatrix> DemandGenerator::Generate(
 
   auto tm =
       SinglePass(locality, nc::net::Bandwidth::FromMBitsPerSecond(1), rnd);
-  double csf = tm->ApproximateMaxCommodityScaleFractor(1.0, 0.99);
+  double csf = tm->MaxCommodityScaleFractor({}, 1.0);
   CHECK(csf != 0);
   tm = tm->Scale(csf);
   tm = tm->Scale(1.0 / commodity_scale_factor);

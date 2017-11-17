@@ -341,8 +341,8 @@ bool SingleCommodityFlowProblem::IsFeasible() {
   return solution->type() == lp::OPTIMAL || solution->type() == lp::FEASIBLE;
 }
 
-static constexpr double kMaxScaleFactor = 10000000.0;
-static constexpr double kStopThreshold = 0.0001;
+static constexpr double kMaxScaleFactor = 1000000.0;
+static constexpr double kStopThreshold = 0.001;
 
 double SingleCommodityFlowProblem::MaxDemandScaleFactor() {
   if (!IsFeasible()) {
