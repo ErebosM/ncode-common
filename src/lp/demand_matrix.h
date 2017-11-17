@@ -158,39 +158,6 @@ class DemandMatrix {
   DISALLOW_COPY_AND_ASSIGN(DemandMatrix);
 };
 
-// Generates a DemandMatrix using a scheme based on Roughan's '93 CCR paper. The
-// method there is extended to support geographic locality.
-class DemandGenerator {
- public:
-  DemandGenerator(const net::GraphStorage* graph);
-
-  // Produces a demand matrix. The matrix is not guaranteed to the satisfiable.
-  std::unique_ptr<DemandMatrix> SinglePass(double locality,
-                                           nc::net::Bandwidth mean,
-                                           std::mt19937* rnd) const;
-
-  // Returns a random matrix with the given commodity scale factor. Will
-  // repeatedly call SinglePass to generate a series of matrices with the
-  // highest mean rate that the commodity scale factor allows.
-  std::unique_ptr<DemandMatrix> Generate(double commodity_scale_factor,
-                                         double locality,
-                                         std::mt19937* rnd) const;
-
- private:
-  // For the locality constraints will also need the delays of the N*(N-1)
-  // shortest paths in the graph.
-  nc::net::AllPairShortestPath sp_;
-
-  // The graph.
-  const net::GraphStorage* graph_;
-
-  // Sum of 1 / D_i where D_i is the delay of the shortest path of the i-th
-  // IE-pair
-  double sum_inverse_delays_squared_;
-
-  DISALLOW_COPY_AND_ASSIGN(DemandGenerator);
-};
-
 }  // namespace lp
 }  // namespace nc
 
