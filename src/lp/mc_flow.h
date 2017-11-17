@@ -192,6 +192,20 @@ class MaxFlowSingleCommodityFlowProblem : public SingleCommodityFlowProblem {
       std::map<SrcAndDst, std::vector<FlowAndPath>>* paths = nullptr);
 };
 
+// Minimizes the maximum link utilization.
+class MinMaxProblem : public SingleCommodityFlowProblem {
+ public:
+  MinMaxProblem(const nc::net::GraphStorage* graph,
+                const net::GraphLinkMap<double>& link_capacities,
+                bool also_minimize_delay)
+      : SingleCommodityFlowProblem(link_capacities, graph),
+        also_minimize_delay_(also_minimize_delay) {}
+
+  double Solve(std::map<SrcAndDst, std::vector<FlowAndPath>>* paths = nullptr);
+
+  bool also_minimize_delay_;
+};
+
 }  // namespace lp
 }  // namespace ncode
 #endif

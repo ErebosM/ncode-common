@@ -637,5 +637,72 @@ MaxFlowSingleCommodityFlowProblem::MaxFlowSingleCommodityFlowProblem(
     const net::GraphStorage* graph)
     : SingleCommodityFlowProblem(link_capacities, graph) {}
 
+double MinMaxProblem::Solve(
+    std::map<SrcAndDst, std::vector<FlowAndPath>>* paths) {
+  Problem problem(MINIMIZE);
+  std::vector<ProblemMatrixElement> problem_matrix;
+  VarMap link_to_variables =
+      GetLinkToVariableMap(&problem, &problem_matrix, false);
+  AddFlowConservationConstraints(link_to_variables, &problem, &problem_matrix);
+
+  // There will be one max utilization variable.
+  VariableIndex max_utilization_var = problem.AddVariable();
+  problem.SetVariableRange(max_utilization_var, 0, Problem::kInifinity);
+  problem.SetObjectiveCoefficient(max_utilization_var, 100000.0);
+
+  // Will add per-link constraints to make each link's utilization less than
+  // the max utilization.
+  for (const auto& link_and_variables : link_to_variables) {
+    nc::net::GraphLinkIndex link_index = link_and_variables.first;
+    const nc::net::GraphLink* link = graph_->GetLink(link_index);
+    const nc::net::GraphNodeMap<VariableIndex>& variables =
+        *link_and_variables.second;
+
+    // All utilization variables will be less than max utilization.
+    ConstraintIndex utilization_var_constraint = problem.AddConstraint();
+    problem.SetConstraintRange(utilization_var_constraint,
+                               Problem::kNegativeInifinity, 0);
+    problem_matrix.emplace_back(utilization_var_constraint, max_utilization_var,
+                                -1.0);
+
+    VariableIndex link_utilization_var = problem.AddVariable();
+    problem.SetVariableRange(link_utilization_var, 0, Problem::kInifinity);
+    problem_matrix.emplace_back(utilization_var_constraint,
+                                link_utilization_var, 1.0);
+
+    ConstraintIndex constraint = problem.AddConstraint();
+    problem.SetConstraintRange(constraint, 0, 0);
+    problem_matrix.emplace_back(constraint, link_utilization_var, -1.0);
+    double link_capacity = link->bandwidth().Mbps();
+
+    // The coefficient of each variable that goes over the link should be 1 /
+    // link capacity.
+    for (const auto& dst_and_variable : variables) {
+      VariableIndex variable = *dst_and_variable.second;
+      problem_matrix.emplace_back(constraint, variable, 1.0 / link_capacity);
+    }
+
+    double link_weight =
+        std::chrono::duration<double, std::milli>(link->delay()).count();
+    if (also_minimize_delay_) {
+      problem.SetObjectiveCoefficient(link_utilization_var, link_weight);
+    } else {
+      problem.SetObjectiveCoefficient(link_utilization_var, -link_weight);
+    }
+  }
+
+  // Solve the problem.
+  problem.SetMatrix(problem_matrix);
+  std::unique_ptr<Solution> solution = problem.Solve();
+  CHECK(solution->type() == nc::lp::OPTIMAL ||
+        solution->type() == nc::lp::FEASIBLE);
+
+  if (paths != nullptr) {
+    *paths = RecoverPathsFromSolution(link_to_variables, *solution);
+  }
+
+  return solution->VariableValue(max_utilization_var);
+}
+
 }  // namespace lp
 }  // namespace ncode

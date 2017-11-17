@@ -258,10 +258,15 @@ bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude,
   return max_flow_problem.IsFeasible();
 }
 
-double DemandMatrix::MaxCommodityScaleFractor(
-    const net::GraphLinkSet& to_exclude,
-    double link_capacity_multiplier) const {
-  return GetMaxFlow(to_exclude, link_capacity_multiplier).second;
+double DemandMatrix::MaxCommodityScaleFactor(
+    const net::GraphLinkSet& to_exclude, double capacity_multiplier) const {
+  MinMaxProblem max_flow_problem(
+      graph_, GetCapacities(to_exclude, capacity_multiplier, *graph_), true);
+  for (const DemandMatrixElement& element : elements_) {
+    max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
+  }
+
+  return 1.0 / max_flow_problem.Solve();
 }
 
 bool DemandMatrix::ResilientToFailures() const {
@@ -294,7 +299,7 @@ std::string DemandMatrix::ToString() const {
       &out,
       nc::StrCat(
           "TM with ", static_cast<uint64_t>(elements_.size()),
-          " demands, scale factor ", MaxCommodityScaleFractor({}, 1.0),
+          " demands, scale factor ", MaxCommodityScaleFactor({}, 1.0),
           "\nSP link utilizations: ", nc::Join(sp_utilization_percentiles, ","),
           "\nDemands (in Mbps): ", nc::Join(demand_percentiles, ","), "\n"));
   return out;
