@@ -337,6 +337,13 @@ class Walk {
   DISALLOW_COPY_AND_ASSIGN(Walk);
 };
 
+// Compares pointers to walks.
+struct WalkPtrComparator {
+  bool operator()(const nc::net::Walk* lhs, const nc::net::Walk* rhs) const {
+    return *lhs < *rhs;
+  }
+};
+
 // General statistics about a graph.
 struct GraphStats {
   size_t links_count;
