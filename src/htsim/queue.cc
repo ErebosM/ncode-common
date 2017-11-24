@@ -64,7 +64,8 @@ Queue::Queue(const std::string& src, const std::string& dst,
              EventQueue* event_queue)
     : EventConsumer(GetQueueId(src, dst), event_queue),
       other_end_(nullptr),
-      bits_seen_in_last_period_(0) {}
+      bits_seen_in_last_period_(0),
+      tags_in_stats_(false) {}
 
 Queue::Queue(const net::GraphLink& edge, EventQueue* event_queue)
     : Queue(edge.src_node()->id(), edge.dst_node()->id(), event_queue) {}
@@ -94,6 +95,11 @@ void FIFOQueue::HandlePacket(PacketPtr pkt) {
       EventQueueTime(time_per_bit_.Raw() * stats_.queue_size_bytes * 8);
   pkt->AddToQueueingTime(to_wait);
   time_waiting_.Add(to_wait.Raw());
+
+  if (tags_in_stats_) {
+    stats_.tag_to_bytes_seen[pkt->tag()] += size_bytes;
+    stats_.tag_to_pkts_seen[pkt->tag()] += 1;
+  }
 
   bool queue_was_empty = queue_.empty();
   queue_.push_back(std::move(pkt));

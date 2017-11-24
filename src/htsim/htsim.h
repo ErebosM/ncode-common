@@ -19,7 +19,7 @@ namespace htsim {
 class SimComponent {
  public:
   // The id of this component.
-  const std::string& id() { return id_; }
+  const std::string& id() const { return id_; }
 
  protected:
   SimComponent(const std::string& id, EventQueue* event_queue)

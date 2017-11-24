@@ -68,6 +68,10 @@ struct QueueStats {
   uint64_t pkts_dropped = 0;
   uint64_t bytes_seen = 0;
   uint64_t bytes_dropped = 0;
+
+  // Only populated if tag-based tracking is enabled.
+  std::map<PacketTag, uint64_t> tag_to_bytes_seen;
+  std::map<PacketTag, uint64_t> tag_to_pkts_seen;
 };
 
 // A common interface for all queues.
@@ -89,6 +93,10 @@ class Queue : public EventConsumer,
   // Changes the drain rate of this queue.
   virtual void SetRate(net::Bandwidth rate) = 0;
 
+  // Sets/gets tag_in_stats_.
+  bool tags_in_stats() const { return tags_in_stats_; }
+  void set_tags_in_stats(bool value) { tags_in_stats_ = value; }
+
   // Applying the value as an animated component means changing the rate.
   void ApplyValue(double value) override;
 
@@ -105,6 +113,9 @@ class Queue : public EventConsumer,
 
   // Number of bits transmitted over the last period.
   size_t bits_seen_in_last_period_;
+
+  // If true the implementation should keep tag-based statistics.
+  bool tags_in_stats_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);

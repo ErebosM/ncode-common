@@ -22,8 +22,12 @@ class AnimationComponent {
   virtual void ApplyValue(double value) = 0;
 };
 
+using AnimationComponentCallback = std::function<void(double)>;
+
 // A single keyframe.
 struct KeyFrame {
+  KeyFrame(std::chrono::nanoseconds at, double value) : at(at), value(value) {}
+
   std::chrono::nanoseconds at;
   double value;
 
@@ -35,12 +39,19 @@ class Animator {
   Animator(const std::vector<KeyFrame>& key_frames,
            AnimationComponent* animation_component);
 
+  Animator(const std::vector<KeyFrame>& key_frames,
+           AnimationComponentCallback callback);
+
   virtual ~Animator() {}
 
   virtual void ApplyAt(EventQueueTime at, EventQueue* event_queue) = 0;
 
  protected:
   AnimationComponent* animation_component_;
+
+  // Callback to call when the value is updated. Either this or
+  // animation_component_ above is set.
+  AnimationComponentCallback callback_;
 
   // The key frames, sorted by time in ms.
   std::map<size_t, KeyFrame> key_frames_;
@@ -51,6 +62,9 @@ class LinearAnimator : public Animator {
  public:
   LinearAnimator(const std::vector<KeyFrame>& key_frames, bool start_at_zero,
                  AnimationComponent* animation_component);
+
+  LinearAnimator(const std::vector<KeyFrame>& key_frames, bool start_at_zero,
+                 AnimationComponentCallback callback);
 
   // Applies the value at a given point in time. The value will be linearly
   // interpolated between adjacent keyframes.

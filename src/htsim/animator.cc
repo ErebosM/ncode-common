@@ -22,11 +22,25 @@ Animator::Animator(const std::vector<KeyFrame>& key_frames,
   }
 }
 
+Animator::Animator(const std::vector<KeyFrame>& key_frames,
+                   AnimationComponentCallback callback)
+    : animation_component_(nullptr), callback_(callback) {
+  CHECK(!key_frames.empty());
+  for (const KeyFrame& key_frame : key_frames) {
+    InsertOrDie(&key_frames_, key_frame.at.count(), key_frame);
+  }
+}
+
 LinearAnimator::LinearAnimator(const std::vector<KeyFrame>& key_frames,
                                bool start_at_zero,
                                AnimationComponent* animation_component)
     : Animator(key_frames, animation_component),
       start_at_zero_(start_at_zero) {}
+
+LinearAnimator::LinearAnimator(const std::vector<KeyFrame>& key_frames,
+                               bool start_at_zero,
+                               AnimationComponentCallback callback)
+    : Animator(key_frames, callback), start_at_zero_(start_at_zero) {}
 
 void LinearAnimator::ApplyAt(EventQueueTime at, EventQueue* event_queue) {
   double value;
@@ -57,7 +71,11 @@ void LinearAnimator::ApplyAt(EventQueueTime at, EventQueue* event_queue) {
     value = value_start_at + (value_end_at - value_start_at) * fraction;
   }
 
-  animation_component_->ApplyValue(value);
+  if (animation_component_ != nullptr) {
+    animation_component_->ApplyValue(value);
+  } else {
+    callback_(value);
+  }
 }
 
 AnimationContainer::AnimationContainer(const std::string& id,
