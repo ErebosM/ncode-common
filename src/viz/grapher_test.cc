@@ -41,57 +41,6 @@ using ReturnVector = std::vector<std::pair<DummyKey, std::vector<double>>>;
 
 static constexpr DummyKey kDefaultDummyKey = DummyKey();
 
-TEST(HtmlOutput, SimpleCDF) {
-  PlotParameters1D plot_params;
-  plot_params.title = "CDF Test";
-  plot_params.data_label = "some units";
-  plot_params.scale = 10.0;
-
-  DataSeries1D data_series_one;
-  data_series_one.data = {1.0, 4.0, 2.0, 3.0, 2.0, 10.0};
-  data_series_one.label = "data_one";
-
-  DataSeries1D data_series_two;
-  data_series_two.data = {0.0, 3.0, 1.0, 2.0, 1.0, 9.0};
-  data_series_two.label = "data_two";
-
-  HtmlPage html_page;
-  HtmlGrapher html_grapher(&html_page);
-  html_grapher.PlotCDF(plot_params, {data_series_one, data_series_two});
-
-  ASSERT_EQ(File::ReadFileToStringOrDie(
-                "../data/html_grapher_test_data/cdf_test.html"),
-            html_page.Construct());
-}
-
-TEST(HtmlOutput, StackedPlot) {
-  PlotParameters2D plot_params;
-  plot_params.title = "Stacked Plot Test";
-  plot_params.x_label = "some units";
-  plot_params.y_label = "other units";
-  plot_params.x_scale = 2.0;
-  plot_params.y_scale = 3.0;
-
-  DataSeries2D data_series_one;
-  data_series_one.data = {{1.0, 10.0}, {2.0, 15.0}, {3.1, 4.0}, {5.0, 10}};
-  data_series_one.label = "data_one";
-
-  DataSeries2D data_series_two;
-  data_series_two.data = {{1.0, 1.0}, {2.1, 2.0}, {3, 4.0}, {5.0, 10}};
-  data_series_two.label = "data_two";
-
-  HtmlPage html_page;
-  HtmlGrapher html_grapher(&html_page);
-
-  std::vector<double> xs = {1, 2, 3, 4, 5, 6};
-  html_grapher.PlotStackedArea(plot_params, xs,
-                               {data_series_one, data_series_two});
-
-  ASSERT_EQ(File::ReadFileToStringOrDie(
-                "../data/html_grapher_test_data/stacked_plot_test.html"),
-            html_page.Construct());
-}
-
 void CheckForKey(const ReturnVector& return_vector, const DummyKey& key,
                  std::vector<double> values) {
   bool found_key = false;
@@ -245,25 +194,48 @@ TEST(PerPeriodClassifier, MultiValue) {
 }
 
 TEST(PythonOutput, CDF) {
-  PlotParameters1D plot_params;
-  DataSeries1D data_series;
-  data_series.data = {1.0, 2.0, 4.0, 3.0, 5.0};
+  CDFPlot cdf_plot;
+  cdf_plot.AddData("", {1.0, 2.0, 4.0, 3.0, 5.0});
 
-  PythonGrapher python_grapher("line_output_folder");
-  python_grapher.PlotCDF(plot_params, {data_series});
+  HtmlPage page;
+  cdf_plot.PlotToHtml(&page);
+  nc::File::WriteStringToFile(page.Construct(), "cdf.html");
+}
+
+TEST(PythonOutput, StackedLine) {
+  StackedLinePlot plot({1.0, 2.0, 4.0, 3.0, 5.0});
+  plot.AddData(
+      "series one",
+      {{1.0, 10.0}, {2.0, 10.0}, {4.0, 34.0}, {3.0, 67.0}, {5.0, 32.0}});
+  plot.AddData("series two",
+               {{1.5, 1.0}, {2.5, 1.0}, {4.5, 10.0}, {3.5, 25.0}, {5.5, 32.0}});
+
+  HtmlPage page;
+  plot.PlotToHtml(&page);
+  nc::File::WriteStringToFile(page.Construct(), "stacked.html");
 }
 
 TEST(PythonOutput, Bar) {
-  PlotParameters1D plot_params;
-  DataSeries1D data_series;
-  data_series.data = {1.0, 2.0, 4.0, 3.0, 5.0};
+  BarPlot plot({"D1", "D2", "D3", "D4", "D5"});
+  plot.AddData("series one", {1.0, 2.0, 4.0, 3.0, 5.0});
+  plot.AddData("series two", {4.0, 2.0, 8.0, 1.0, 6.0});
 
-  DataSeries1D other_data_series;
-  other_data_series.data = {4.0, 2.0, 8.0, 1.0, 6.0};
+  HtmlPage page;
+  plot.PlotToHtml(&page);
+  nc::File::WriteStringToFile(page.Construct(), "bar.html");
+}
 
-  PythonGrapher python_grapher("bar_output_folder");
-  python_grapher.PlotBar(plot_params, {"D1", "D2", "D3", "D4", "D5"},
-                         {data_series, other_data_series});
+TEST(PythonOutput, HMap) {
+  HeatmapPlot plot;
+  plot.AddData({1, 2, 3, 4, 5});
+  plot.AddData({1, 2, 3, 4, 5});
+  plot.AddData({1, 2, 3, 4, 5});
+  plot.AddData({1, 2, 3, 4, 5});
+  plot.AddData({1, 2, 3, 4, 5});
+
+  HtmlPage page;
+  plot.PlotToHtml(&page);
+  nc::File::WriteStringToFile(page.Construct(), "hmap.html");
 }
 
 TEST(PythonOutput, Npy) {

@@ -8,23 +8,20 @@ parser.add_argument('--dump_svg', type=bool, default=False,
                    help='If true will not plot to screen, but dump SVG to stdout.')
 args = parser.parse_args()
 
+all_data = []
 for filename, label in {{files_and_labels}}:
     data = np.loadtxt(filename)
-    x = data[:,0]
-    y = data[:,1]
-    x, y = zip(*sorted(zip(x, y)))
-    plt.plot(x, y, label=label)
+    all_data.append(data)
+all_data = np.vstack(all_data)
 
 ax = plt.gca()
-for lines_and_labels in {{lines_and_labels}}:
+for x_pos, label in {{lines_and_labels}}:
     next_color = ax._get_lines.get_next_color()
-    for x_pos, label in lines_and_labels:
-        plt.axvline(x_pos, label=label, color=next_color)
+    plt.axvline(x_pos, label=label, color=next_color)
 
-for ranges in {{ranges}}:
-    next_color = ax._get_lines.get_next_color()
-    for x1, x2 in ranges:
-        plt.axvspan(x1, x2, color=next_color)
+fig = plt.gcf()
+im = ax.imshow(all_data, cmap='hot', interpolation='nearest')
+fig.colorbar(im)
 
 plt.title('{{title}}')
 plt.xlabel('{{xlabel}}')

@@ -1,20 +1,24 @@
 #include "grapher.h"
 
+#include <unistd.h>
+#include <mutex>
+#include <array>
+#include <cstdint>
+#include <cstdio>
 #include <functional>
-#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <random>
 #include <type_traits>
 
 #include "../file.h"
+#include "../map_util.h"
 #include "../stats.h"
 #include "../strutil.h"
-#include "../substitute.h"
+#include "web_page.h"
 #include "ctemplate/template.h"
 #include "ctemplate/template_dictionary.h"
 #include "ctemplate/template_enums.h"
-#include "web_page.h"
 
 namespace nc {
 namespace viz {
@@ -26,14 +30,18 @@ extern "C" const unsigned char grapher_line_py[];
 extern "C" const unsigned grapher_line_py_size;
 extern "C" const unsigned char grapher_bar_py[];
 extern "C" const unsigned grapher_bar_py_size;
+extern "C" const unsigned char grapher_stacked_py[];
+extern "C" const unsigned grapher_stacked_py_size;
 extern "C" const unsigned char grapher_npy_dump_py[];
 extern "C" const unsigned grapher_npy_dump_py_size;
-
-static constexpr char kPlotlyJS[] = "https://cdn.plot.ly/plotly-latest.min.js";
+extern "C" const unsigned char grapher_hmap_py[];
+extern "C" const unsigned grapher_hmap_py_size;
 
 static constexpr char kPythonGrapherCDFPlot[] = "cdf_plot";
+static constexpr char kPythonGrapherStackedPlot[] = "stacked_plot";
 static constexpr char kPythonGrapherLinePlot[] = "line_plot";
 static constexpr char kPythonGrapherBarPlot[] = "bar_plot";
+static constexpr char kPythonGrapherHMapPlot[] = "hmap_plot";
 static constexpr char kPythonNpyDump[] = "npy_dump";
 static constexpr char kPythonNpyDumpDTypeMarker[] = "dtype";
 static constexpr char kPythonGrapherCategoriesMarker[] = "categories";
@@ -43,11 +51,20 @@ static constexpr char kPythonGrapherYLabelMarker[] = "ylabel";
 static constexpr char kPythonGrapherFilesAndLabelsMarker[] = "files_and_labels";
 static constexpr char kPythonGrapherLinesAndLabelsMarker[] = "lines_and_labels";
 static constexpr char kPythonGrapherRangesMarker[] = "ranges";
+static constexpr char kPythonGrapherStackedXSMarker[] =
+    "stacked_plot_xs_filename";
 
-constexpr char HtmlGrapher::kDefaultGraphIdPrefix[];
 constexpr const char* NpyArray::kFieldTypeNames[];
 
 static constexpr size_t kMaxPythonCDFDatapoints = 10000;
+static constexpr size_t kChunkSize = 1024;
+
+// Because each execute changes the working directory, only one of them can
+// execute at a time.
+static std::mutex kExecuteMutex;
+
+// Command that can be used to get SVG output out of a plotting script.
+static constexpr char kSVGCommand[] = "python plot.py --dump_svg True";
 
 // Samples approximately N values at random, preserving order.
 template <typename T>
@@ -70,36 +87,31 @@ static std::vector<T> SampleRandom(const std::vector<T>& values, size_t n) {
   return sampled;
 }
 
-static std::string Plotly2DLayoutString(const PlotParameters2D& plot_params) {
-  std::string layout_string = "var layout = {";
-  if (!plot_params.title.empty()) {
-    StrAppend(&layout_string, Substitute("title: '$0',", plot_params.title));
+static std::string ExecuteInDirectory(const std::string& cmd,
+                                      const std::string& working_dir) {
+  std::unique_lock<std::mutex> lock(kExecuteMutex);
+  std::array<char, kChunkSize> current_cwd;
+  CHECK(getcwd(current_cwd.data(), kChunkSize) != NULL);
+  CHECK(chdir(working_dir.c_str()) == 0);
+
+  FILE* in;
+  std::string result;
+  std::array<char, kChunkSize> buffer;
+  in = popen(cmd.c_str(), "r");
+  CHECK(in != nullptr) << "popen() failed!";
+  while (fgets(buffer.data(), kChunkSize, in) != nullptr) {
+    result += buffer.data();
   }
 
-  StrAppend(&layout_string, "xaxis: {");
-  if (!plot_params.x_label.empty()) {
-    StrAppend(&layout_string, Substitute("title: '$0'", plot_params.x_label));
-  }
-
-  StrAppend(&layout_string, "}, yaxis: {");
-  if (!plot_params.y_label.empty()) {
-    StrAppend(&layout_string, Substitute("title: '$0'", plot_params.y_label));
-  }
-
-  StrAppend(&layout_string,
-            "}, showlegend: true, legend: {\"orientation\": \"h\"}, yaxis: "
-            "{rangemode: \"tozero\", autorange: true}};");
-  return layout_string;
+  CHECK(chdir(current_cwd.data()) == 0);
+  return result;
 }
 
-static std::string Plotly1DLayoutString(const PlotParameters1D& plot_params) {
-  std::string layout_string = "var layout = {";
-  if (!plot_params.title.empty()) {
-    StrAppend(&layout_string, Substitute("title: '$0',", plot_params.title));
-  }
-
-  StrAppend(&layout_string, "}};");
-  return layout_string;
+static std::string GetTmpDirectory() {
+  std::unique_lock<std::mutex> lock(kExecuteMutex);
+  char dir_name[] = "/tmp/grapherXXXXXX";
+  CHECK(mkdtemp(dir_name) != nullptr);
+  return {dir_name};
 }
 
 static std::vector<DataSeries2D> Preprocess2DData(
@@ -124,8 +136,7 @@ static std::vector<DataSeries2D> Preprocess2DData(
 }
 
 static std::vector<DataSeries1D> Preprocess1DData(
-    const PlotParameters1D& plot_parameters,
-    const std::vector<DataSeries1D>& series) {
+    double scale, const std::vector<DataSeries1D>& series) {
   std::vector<DataSeries1D> return_data;
   for (const DataSeries1D& input_series : series) {
     DataSeries1D processed_series;
@@ -133,150 +144,12 @@ static std::vector<DataSeries1D> Preprocess1DData(
     processed_series.data = input_series.data;
 
     for (size_t i = 0; i < processed_series.data.size(); ++i) {
-      processed_series.data[i] *= plot_parameters.scale;
+      processed_series.data[i] *= scale;
     }
     return_data.emplace_back(std::move(processed_series));
   }
 
   return return_data;
-}
-
-void HtmlGrapher::PlotLine(const PlotParameters2D& plot_params,
-                           const std::vector<DataSeries2D>& series) {
-  page_->AddScript(kPlotlyJS);
-  std::string* b = page_->body();
-
-  std::string div_id = Substitute("$0_$1", graph_id_prefix_, id_);
-  std::string div = Substitute("<div id=\"$0\"></div>", div_id);
-  StrAppend(b, div);
-
-  std::string script = "<script>";
-  std::vector<std::string> var_names;
-
-  std::vector<DataSeries2D> processed_series =
-      Preprocess2DData(plot_params, series);
-
-  for (size_t i = 0; i < processed_series.size(); ++i) {
-    std::vector<std::pair<double, double>> data = processed_series[i].data;
-
-    // If there are too many values will sample randomly.
-    if (data.size() > max_values_) {
-      data = SampleRandom(data, max_values_);
-    }
-
-    std::vector<std::string> x_formatted(data.size());
-    std::vector<std::string> y_formatted(data.size());
-    for (size_t i = 0; i < data.size(); ++i) {
-      x_formatted[i] = ToStringMaxDecimals(data[i].first, 3);
-      y_formatted[i] = ToStringMaxDecimals(data[i].second, 3);
-    }
-
-    std::string var_name = Substitute("data_$0", i);
-    var_names.push_back(var_name);
-    std::string series_string = StrCat("var ", var_name, " = {x: [");
-    StrAppend(&series_string, Join(x_formatted, ","), "], y: [",
-              Join(y_formatted, ","), "], mode: 'lines', ");
-    StrAppend(&series_string, Substitute("name : '$0'", series[i].label), "};");
-    StrAppend(&script, series_string);
-  }
-
-  StrAppend(&script, Plotly2DLayoutString(plot_params));
-  StrAppend(&script, "var data = [", Join(var_names, ","), "];",
-            Substitute("Plotly.newPlot('$0', data, layout);", div_id));
-  StrAppend(&script, "</script>");
-  StrAppend(b, script);
-
-  ++id_;
-}
-
-void HtmlGrapher::PlotStackedArea(const PlotParameters2D& plot_params,
-                                  const std::vector<double>& xs,
-                                  const std::vector<DataSeries2D>& series) {
-  page_->AddScript(kPlotlyJS);
-  std::string* b = page_->body();
-
-  std::string div_id = Substitute("$0_$1", graph_id_prefix_, id_);
-  std::string div = Substitute("<div id=\"$0\"></div>", div_id);
-  StrAppend(b, div);
-
-  std::string script = "<script>";
-  std::vector<std::string> var_names;
-
-  std::vector<DataSeries2D> processed_series =
-      Preprocess2DData(plot_params, series);
-
-  size_t num_points = xs.size();
-  std::vector<double> scaled_xs = xs;
-  std::vector<std::string> x_formatted(num_points);
-  for (size_t i = 0; i < num_points; ++i) {
-    scaled_xs[i] *= plot_params.x_scale;
-    x_formatted[i] = ToStringMaxDecimals(scaled_xs[i], 3);
-  }
-
-  std::vector<double> ys_cumulative(num_points, 0.0);
-  for (size_t i = 0; i < processed_series.size(); ++i) {
-    std::vector<std::pair<double, double>>& data = processed_series[i].data;
-    Empirical2DFunction f(data, Empirical2DFunction::LINEAR);
-
-    std::vector<std::string> y_formatted(num_points);
-    for (size_t point_index = 0; point_index < num_points; ++point_index) {
-      double x = scaled_xs[point_index];
-      ys_cumulative[point_index] += f.Eval(x);
-      y_formatted[point_index] =
-          ToStringMaxDecimals(ys_cumulative[point_index], 3);
-    }
-
-    std::string var_name = Substitute("data_$0", i);
-    var_names.push_back(var_name);
-
-    std::string fill_type = i == 0 ? "tozeroy" : "tonexty";
-    std::string series_string =
-        Substitute("var $0 = {x: [$1], y: [$2], fill:'$3', name:'$4'};",
-                   var_name, Join(x_formatted, ","), Join(y_formatted, ","),
-                   fill_type, series[i].label);
-    StrAppend(&script, series_string);
-  }
-
-  StrAppend(&script, Plotly2DLayoutString(plot_params));
-  StrAppend(&script, "var data = [", Join(var_names, ","), "];",
-            Substitute("Plotly.newPlot('$0', data, layout);", div_id));
-  StrAppend(&script, "</script>");
-  StrAppend(b, script);
-
-  ++id_;
-}
-
-void HtmlGrapher::PlotCDF(const PlotParameters1D& plot_params,
-                          const std::vector<DataSeries1D>& series) {
-  std::vector<DataSeries2D> series_2d;
-
-  std::vector<DataSeries1D> processed_series =
-      Preprocess1DData(plot_params, series);
-  for (const DataSeries1D& data_1d : processed_series) {
-    std::vector<double> x = data_1d.data;
-
-    // If there are too many values will take the k percentiles.
-    if (x.size() > max_values_) {
-      x = Percentiles(&x, max_values_ - 1);
-    }
-    std::sort(x.begin(), x.end());
-
-    std::vector<std::pair<double, double>> xy(x.size());
-    for (size_t i = 0; i < x.size(); ++i) {
-      xy[i] = std::make_pair(x[i], static_cast<double>(i) / x.size());
-    }
-
-    DataSeries2D xy_series;
-    xy_series.data = std::move(xy);
-    xy_series.label = data_1d.label;
-    series_2d.emplace_back(xy_series);
-  }
-
-  PlotParameters2D plot_params_2d;
-  plot_params_2d.x_label = plot_params.data_label;
-  plot_params_2d.y_label = "frequency";
-  plot_params_2d.title = plot_params.title;
-  PlotLine(plot_params_2d, series_2d);
 }
 
 static std::string Quote(const std::string& string) {
@@ -291,47 +164,6 @@ static std::string QuotedList(const std::vector<std::string>& strings) {
   }
 
   return StrCat("[", Join(strings_quoted, ","), "]");
-}
-
-void HtmlGrapher::PlotBar(const PlotParameters1D& plot_params,
-                          const std::vector<std::string>& categories,
-                          const std::vector<DataSeries1D>& series) {
-  page_->AddScript(kPlotlyJS);
-  std::string* b = page_->body();
-
-  std::string div_id = Substitute("$0_$1", graph_id_prefix_, id_);
-  std::string div = Substitute("<div id=\"$0\"></div>", div_id);
-  StrAppend(b, div);
-
-  std::string script = "<script>";
-  std::vector<std::string> var_names;
-
-  // Have to '' all the categories, since they are strings.
-  std::string categores_quoted = QuotedList(categories);
-
-  std::vector<DataSeries1D> processed_series =
-      Preprocess1DData(plot_params, series);
-  for (size_t i = 0; i < processed_series.size(); ++i) {
-    const DataSeries1D& series_1d = processed_series[i];
-    CHECK(series_1d.data.size() == categories.size());
-
-    std::string var_name = Substitute("data_$0", i);
-    var_names.push_back(var_name);
-    std::string series_string =
-        StrCat("var ", var_name, " = {x: ", categores_quoted);
-    StrAppend(&series_string, ", y: [", Join(series_1d.data, ","),
-              "], type: 'bar', ");
-    StrAppend(&series_string, Substitute("name : '$0'", series[i].label), "};");
-    StrAppend(&script, series_string);
-  }
-
-  StrAppend(&script, Plotly1DLayoutString(plot_params));
-  StrAppend(&script, "var data = [", Join(var_names, ","), "];",
-            Substitute("Plotly.newPlot('$0', data, layout);", div_id));
-  StrAppend(&script, "</script>");
-  StrAppend(b, script);
-
-  ++id_;
 }
 
 static void InitPythonPlotTemplates() {
@@ -350,6 +182,15 @@ static void InitPythonPlotTemplates() {
                              grapher_bar_py_size);
     ctemplate::StringToTemplateCache(kPythonGrapherBarPlot, bar_template,
                                      ctemplate::DO_NOT_STRIP);
+    std::string hmap_template(reinterpret_cast<const char*>(grapher_hmap_py),
+                              grapher_hmap_py_size);
+    ctemplate::StringToTemplateCache(kPythonGrapherHMapPlot, hmap_template,
+                                     ctemplate::DO_NOT_STRIP);
+    std::string stacked_template(
+        reinterpret_cast<const char*>(grapher_stacked_py),
+        grapher_stacked_py_size);
+    ctemplate::StringToTemplateCache(kPythonGrapherStackedPlot,
+                                     stacked_template, ctemplate::DO_NOT_STRIP);
     std::string npy_parse_template(
         reinterpret_cast<const char*>(grapher_npy_dump_py),
         grapher_npy_dump_py_size);
@@ -384,7 +225,7 @@ void SaveSeriesToFile<DataSeries2D>(const DataSeries2D& data_series,
 }
 
 template <typename T>
-static std::unique_ptr<ctemplate::TemplateDictionary> Plot(
+static std::unique_ptr<ctemplate::TemplateDictionary> PlotCommon(
     const PlotParameters& plot_params, const std::vector<T>& series,
     const std::string& output_dir) {
   std::vector<std::string> filenames_and_labels;
@@ -437,77 +278,86 @@ static std::unique_ptr<ctemplate::TemplateDictionary> Plot(
   return dictionary;
 }
 
-void PythonGrapher::PlotLine(const PlotParameters2D& plot_params,
-                             const std::vector<DataSeries2D>& series) {
-  auto dictionary = Plot<DataSeries2D>(
-      plot_params, Preprocess2DData(plot_params, series), output_dir_);
-  dictionary->SetValue(kPythonGrapherXLabelMarker, plot_params.x_label);
-  dictionary->SetValue(kPythonGrapherYLabelMarker, plot_params.y_label);
+void LinePlot::PlotToDir(const std::string& output) {
+  auto dictionary = PlotCommon<DataSeries2D>(
+      params_, Preprocess2DData(params_, data_series_), output);
+  dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
+  dictionary->SetValue(kPythonGrapherYLabelMarker, params_.y_label);
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherLinePlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::WriteStringToFileOrDie(script, StrCat(output_dir_, "/plot.py"));
+  File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-// Samples a set of values. The vector will contain at most
-// kMaxPythonCDFDatapoints values.
-static void CDFSample(std::vector<double>* v) {
-  if (v->size() <= kMaxPythonCDFDatapoints) {
-    return;
-  }
+void CDFPlot::PlotToDir(const std::string& output) {
+  std::vector<DataSeries1D> data_series =
+      Preprocess1DData(params_.scale, data_series_);
 
-  std::vector<double> new_values = Percentiles(v, kMaxPythonCDFDatapoints);
-  std::swap(*v, new_values);
-}
-
-void PythonGrapher::PlotCDF(const PlotParameters1D& plot_params,
-                            const std::vector<DataSeries1D>& series) {
-  std::vector<DataSeries1D> data_series = Preprocess1DData(plot_params, series);
-  for (auto& series : data_series) {
-    CDFSample(&series.data);
-  }
-
-  auto dictionary = Plot<DataSeries1D>(plot_params, data_series, output_dir_);
-  dictionary->SetValue(kPythonGrapherXLabelMarker, plot_params.data_label);
-  dictionary->SetValue(kPythonGrapherYLabelMarker, "frequency");
+  std::unique_ptr<ctemplate::TemplateDictionary> dictionary =
+      PlotCommon(params_, data_series_, output);
+  dictionary->SetValue(kPythonGrapherXLabelMarker, params_.data_label);
+  dictionary->SetValue(kPythonGrapherYLabelMarker, "CDF");
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherCDFPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::WriteStringToFileOrDie(script, StrCat(output_dir_, "/plot.py"));
+  File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void PythonGrapher::PlotBar(const PlotParameters1D& plot_params,
-                            const std::vector<std::string>& categories,
-                            const std::vector<DataSeries1D>& series) {
-  auto dictionary = Plot<DataSeries1D>(
-      plot_params, Preprocess1DData(plot_params, series), output_dir_);
-  dictionary->SetValue(kPythonGrapherCategoriesMarker, QuotedList(categories));
-  dictionary->SetValue(kPythonGrapherYLabelMarker, plot_params.data_label);
+void StackedLinePlot::PlotToDir(const std::string& output) {
+  auto dictionary = PlotCommon<DataSeries2D>(
+      params_, Preprocess2DData(params_, data_series_), output);
+  dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
+  dictionary->SetValue(kPythonGrapherYLabelMarker, params_.y_label);
+
+  std::string xs_str = nc::StrCat("[", Join(xs_, ","), "]");
+  dictionary->SetValue(kPythonGrapherStackedXSMarker, xs_str);
+
+  std::string script;
+  CHECK(ctemplate::ExpandTemplate(kPythonGrapherStackedPlot,
+                                  ctemplate::DO_NOT_STRIP, dictionary.get(),
+                                  &script));
+  File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
+}
+
+void BarPlot::PlotToDir(const std::string& output) {
+  auto dictionary = PlotCommon<DataSeries1D>(
+      params_, Preprocess1DData(params_.scale, data_series_), output);
+  dictionary->SetValue(kPythonGrapherCategoriesMarker, QuotedList(categories_));
+  dictionary->SetValue(kPythonGrapherYLabelMarker, params_.data_label);
   dictionary->SetValue(kPythonGrapherXLabelMarker, "category");
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherBarPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::WriteStringToFileOrDie(script, StrCat(output_dir_, "/plot.py"));
+  File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void PythonGrapher::PlotStackedArea(const PlotParameters2D& plot_params,
-                                    const std::vector<double>& xs,
-                                    const std::vector<DataSeries2D>& series) {
-  LOG(ERROR) << "Not implemented yet";
-  Unused(plot_params);
-  Unused(xs);
-  Unused(series);
+void HeatmapPlot::PlotToDir(const std::string& output) {
+  CHECK(params_.x_scale == params_.y_scale)
+      << "Heatmap data should have same x/y scale";
+  CHECK(params_.x_bin_size == 1) << "Cannot bin heatmap data";
+  auto dictionary = PlotCommon<DataSeries1D>(
+      params_, Preprocess1DData(params_.x_scale, data_series_), output);
+  dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
+  dictionary->SetValue(kPythonGrapherYLabelMarker, params_.y_label);
+
+  std::string script;
+  CHECK(ctemplate::ExpandTemplate(kPythonGrapherHMapPlot,
+                                  ctemplate::DO_NOT_STRIP, dictionary.get(),
+                                  &script));
+  File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-PythonGrapher::PythonGrapher(const std::string& output_dir)
-    : output_dir_(output_dir) {
-  File::CreateDir(output_dir, 0700);
+void Plot::PlotToHtml(HtmlPage* page) {
+  std::string tmp_dir = GetTmpDirectory();
+  PlotToDir(tmp_dir);
+  std::string svg = ExecuteInDirectory(kSVGCommand, tmp_dir);
+  page->body()->append(svg);
 }
 
 void NpyArray::AddRow(const std::vector<StringOrNumeric>& row) {

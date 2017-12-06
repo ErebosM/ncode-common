@@ -93,95 +93,145 @@ struct PlotParameters1D : public PlotParameters {
   std::string data_label;
 };
 
-// Plots graphs.
-class Grapher {
+// An interface for all plots.
+class Plot {
  public:
-  virtual ~Grapher() {}
+  virtual ~Plot() {}
 
-  virtual void PlotCDF(const PlotParameters1D& plot_params,
-                       const std::vector<DataSeries1D>& series) = 0;
+  // Saves the plot to a directory, creating any parent folders if needed.
+  virtual void PlotToDir(const std::string& location) = 0;
 
-  virtual void PlotLine(const PlotParameters2D& plot_params,
-                        const std::vector<DataSeries2D>& series) = 0;
-
-  // A stacked plot. The data series will be interpolated (linearly) at the
-  // given points (xs) and a stacked plot will be produced.
-  virtual void PlotStackedArea(const PlotParameters2D& plot_params,
-                               const std::vector<double>& xs,
-                               const std::vector<DataSeries2D>& series) = 0;
-
-  // 1D data grouped in categories. All series should be the same
-  // length (L) and the number of categories should be L.
-  virtual void PlotBar(const PlotParameters1D& plot_params,
-                       const std::vector<std::string>& categories,
-                       const std::vector<DataSeries1D>& series) = 0;
+  // Generates an SVG plot and embeds it in a web page.
+  void PlotToHtml(HtmlPage* page);
 };
 
-// Plots graphs to an HTML page. This class does not own the page.
-class HtmlGrapher : public Grapher {
+class CDFPlot : public Plot {
  public:
-  static constexpr size_t kDefaultMaxValues = 100000;
-  static constexpr char kDefaultGraphIdPrefix[] = "graph";
+  CDFPlot(const PlotParameters1D& params = {}) : params_(params) {}
 
-  HtmlGrapher(HtmlPage* page, const std::string& id = kDefaultGraphIdPrefix)
-      : max_values_(kDefaultMaxValues),
-        graph_id_prefix_(id),
-        id_(0),
-        page_(page) {}
+  void AddData(const DataSeries1D& data) { data_series_.emplace_back(data); }
 
-  void PlotLine(const PlotParameters2D& plot_params,
-                const std::vector<DataSeries2D>& series) override;
+  void AddData(const std::vector<DataSeries1D>& data) {
+    data_series_.insert(data_series_.end(), data.begin(), data.end());
+  }
 
-  void PlotCDF(const PlotParameters1D& plot_params,
-               const std::vector<DataSeries1D>& series) override;
+  void AddData(const std::string& label, const std::vector<double>& data) {
+    data_series_.emplace_back();
+    data_series_.back().label = label;
+    data_series_.back().data = data;
+  }
 
-  void PlotBar(const PlotParameters1D& plot_params,
-               const std::vector<std::string>& categories,
-               const std::vector<DataSeries1D>& series) override;
+  void AddData(const std::string& label, std::vector<double>* data) {
+    data_series_.emplace_back();
+    data_series_.back().label = label;
+    data_series_.back().data = std::move(*data);
+  }
 
-  void PlotStackedArea(const PlotParameters2D& plot_params,
-                       const std::vector<double>& xs,
-                       const std::vector<DataSeries2D>& series) override;
+  void PlotToDir(const std::string& location) override;
 
-  void set_max_values(size_t max_values) { max_values_ = max_values; }
-
- private:
-  // When plotting the values will be uniformly sampled to only contain this
-  // many values.
-  size_t max_values_;
-
-  // Identifies each graph on the page.
-  std::string graph_id_prefix_;
-
-  // Sequentially incremented for each graph and added to graph_id_prefix_ to
-  // get a unique id for each graph.
-  size_t id_;
-
-  HtmlPage* page_;
+ protected:
+  PlotParameters1D params_;
+  std::vector<DataSeries1D> data_series_;
 };
 
-// Writes python scripts that plot the given graphs.
-class PythonGrapher : public Grapher {
+class LinePlot : public Plot {
  public:
-  PythonGrapher(const std::string& output_dir);
+  LinePlot(const PlotParameters2D& params = {}) : params_(params) {}
 
-  void PlotLine(const PlotParameters2D& plot_params,
-                const std::vector<DataSeries2D>& series) override;
+  void AddData(const std::vector<DataSeries2D>& data) {
+    data_series_.insert(data_series_.end(), data.begin(), data.end());
+  }
 
-  void PlotCDF(const PlotParameters1D& plot_params,
-               const std::vector<DataSeries1D>& series) override;
+  void AddData(const DataSeries2D& data) { data_series_.emplace_back(data); }
 
-  void PlotBar(const PlotParameters1D& plot_params,
-               const std::vector<std::string>& categories,
-               const std::vector<DataSeries1D>& series) override;
+  void AddData(const std::string& label, const std::vector<double>& xs,
+               const std::vector<double>& ys) {
+    data_series_.emplace_back();
+    data_series_.back().label = label;
 
-  void PlotStackedArea(const PlotParameters2D& plot_params,
-                       const std::vector<double>& xs,
-                       const std::vector<DataSeries2D>& series) override;
+    std::vector<std::pair<double, double>> zipped;
+    CHECK(xs.size() == ys.size());
+    for (size_t i = 0; i < xs.size(); ++i) {
+      zipped.emplace_back(xs[i], ys[i]);
+    }
+    data_series_.back().data = std::move(zipped);
+  }
+
+  void AddData(const std::string& label,
+               const std::vector<std::pair<double, double>>& data) {
+    data_series_.emplace_back();
+    data_series_.back().label = label;
+    data_series_.back().data = data;
+  }
+
+  void AddData(const std::string& label,
+               std::vector<std::pair<double, double>>* data) {
+    data_series_.emplace_back();
+    data_series_.back().label = label;
+    data_series_.back().data = std::move(*data);
+  }
+
+  void PlotToDir(const std::string& location) override;
+
+ protected:
+  PlotParameters2D params_;
+  std::vector<DataSeries2D> data_series_;
+};
+
+// A stacked plot. The data series will be interpolated (linearly) at the
+// given points (xs) and a stacked plot will be produced.
+class StackedLinePlot : public LinePlot {
+ public:
+  StackedLinePlot(const std::vector<double>& xs,
+                  const PlotParameters2D& params = {})
+      : LinePlot(params), xs_(xs) {}
+
+  void PlotToDir(const std::string& location) override;
 
  private:
-  // Directory where the scripts will be saved.
-  std::string output_dir_;
+  const std::vector<double> xs_;
+};
+
+// 1D data grouped in categories. All series should be the same
+// length (L) and the number of categories should be L.
+class BarPlot : public CDFPlot {
+ public:
+  BarPlot(const std::vector<std::string>& categories,
+          const PlotParameters1D& params = {})
+      : CDFPlot(params), categories_(categories) {}
+
+  void PlotToDir(const std::string& location) override;
+
+ private:
+  const std::vector<std::string> categories_;
+};
+
+// A heatmap plot.
+class HeatmapPlot : public Plot {
+ public:
+  HeatmapPlot(const PlotParameters2D& params = {}) : params_(params) {}
+
+  void AddData(const std::vector<double>& data) {
+    std::vector<double> data_cpy = data;
+    AddData(&data_cpy);
+  }
+
+  void AddData(const std::vector<double>* data) {
+    if (!data_series_.empty()) {
+      CHECK(data_series_.front().data.size() == data->size());
+    }
+
+    data_series_.emplace_back();
+    data_series_.back().data = std::move(*data);
+  }
+
+  void PlotToDir(const std::string& location) override;
+
+ private:
+  PlotParameters2D params_;
+
+  // The data will consist of rows of the same length with no labels.
+  std::vector<DataSeries1D> data_series_;
 };
 
 // A sequence of real numbers, each paired with a period.

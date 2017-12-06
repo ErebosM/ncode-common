@@ -1,5 +1,15 @@
-#include "gtest/gtest.h"
 #include "server.h"
+
+#include <gtest/gtest.h>
+#include <algorithm>
+#include <chrono>
+#include <cstring>
+#include <iterator>
+#include <memory>
+#include <random>
+#include <type_traits>
+
+#include "../logging.h"
 
 namespace nc {
 namespace viz {

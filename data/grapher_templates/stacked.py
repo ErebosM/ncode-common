@@ -8,12 +8,21 @@ parser.add_argument('--dump_svg', type=bool, default=False,
                    help='If true will not plot to screen, but dump SVG to stdout.')
 args = parser.parse_args()
 
+xs = sorted(np.loadtxt({{stacked_plot_xs_filename}}))
+ys = []
+labels = []
 for filename, label in {{files_and_labels}}:
     data = np.loadtxt(filename)
     x = data[:,0]
     y = data[:,1]
     x, y = zip(*sorted(zip(x, y)))
-    plt.plot(x, y, label=label)
+
+    # Need to interpolate along xs
+    y = np.interp(xs, x, y)
+    ys.append(y)
+
+    labels.append(label)
+plt.stackplot(xs, ys, labels=labels)
 
 ax = plt.gca()
 for lines_and_labels in {{lines_and_labels}}:

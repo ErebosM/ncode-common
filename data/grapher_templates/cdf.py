@@ -1,5 +1,12 @@
 import numpy as np
 import matplotlib.pylab as plt
+import argparse
+from io import BytesIO
+
+parser = argparse.ArgumentParser(description='Plots a CDF')
+parser.add_argument('--dump_svg', type=bool, default=False,
+                   help='If true will not plot to screen, but dump SVG to stdout.')
+args = parser.parse_args()
 
 def PlotCDF(x, label):
     x = np.sort(x)
@@ -19,4 +26,13 @@ plt.title('{{title}}')
 plt.xlabel('{{xlabel}}')
 plt.ylabel('{{ylabel}}')
 plt.legend()
-plt.show()
+
+if args.dump_svg:
+    # Save SVG in a fake file object.
+    imgdata = BytesIO()
+    plt.savefig(imgdata, format="svg")
+    svg_img = imgdata.getvalue()
+    svg_img = '<svg' + svg_img.split('<svg')[1]
+    print svg_img
+else:
+    plt.show()
