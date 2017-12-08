@@ -278,7 +278,7 @@ static std::unique_ptr<ctemplate::TemplateDictionary> PlotCommon(
   return dictionary;
 }
 
-void LinePlot::PlotToDir(const std::string& output) {
+void LinePlot::PlotToDir(const std::string& output) const {
   auto dictionary = PlotCommon<DataSeries2D>(
       params_, Preprocess2DData(params_, data_series_), output);
   dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
@@ -291,7 +291,7 @@ void LinePlot::PlotToDir(const std::string& output) {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void CDFPlot::PlotToDir(const std::string& output) {
+void CDFPlot::PlotToDir(const std::string& output) const {
   std::vector<DataSeries1D> data_series =
       Preprocess1DData(params_.scale, data_series_);
 
@@ -307,7 +307,7 @@ void CDFPlot::PlotToDir(const std::string& output) {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void StackedLinePlot::PlotToDir(const std::string& output) {
+void StackedLinePlot::PlotToDir(const std::string& output) const {
   auto dictionary = PlotCommon<DataSeries2D>(
       params_, Preprocess2DData(params_, data_series_), output);
   dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
@@ -323,7 +323,7 @@ void StackedLinePlot::PlotToDir(const std::string& output) {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void BarPlot::PlotToDir(const std::string& output) {
+void BarPlot::PlotToDir(const std::string& output) const {
   auto dictionary = PlotCommon<DataSeries1D>(
       params_, Preprocess1DData(params_.scale, data_series_), output);
   dictionary->SetValue(kPythonGrapherCategoriesMarker, QuotedList(categories_));
@@ -337,7 +337,7 @@ void BarPlot::PlotToDir(const std::string& output) {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void HeatmapPlot::PlotToDir(const std::string& output) {
+void HeatmapPlot::PlotToDir(const std::string& output) const {
   CHECK(params_.x_scale == params_.y_scale)
       << "Heatmap data should have same x/y scale";
   CHECK(params_.x_bin_size == 1) << "Cannot bin heatmap data";
@@ -353,10 +353,15 @@ void HeatmapPlot::PlotToDir(const std::string& output) {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
-void Plot::PlotToHtml(HtmlPage* page) {
+std::string Plot::PlotToSVG() const {
   std::string tmp_dir = GetTmpDirectory();
   PlotToDir(tmp_dir);
   std::string svg = ExecuteInDirectory(kSVGCommand, tmp_dir);
+  return svg;
+}
+
+void Plot::PlotToHtml(HtmlPage* page) const {
+  std::string svg = PlotToSVG();
   page->body()->append(svg);
 }
 

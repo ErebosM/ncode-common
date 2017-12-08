@@ -99,10 +99,12 @@ class Plot {
   virtual ~Plot() {}
 
   // Saves the plot to a directory, creating any parent folders if needed.
-  virtual void PlotToDir(const std::string& location) = 0;
+  virtual void PlotToDir(const std::string& location) const = 0;
+
+  std::string PlotToSVG() const;
 
   // Generates an SVG plot and embeds it in a web page.
-  void PlotToHtml(HtmlPage* page);
+  void PlotToHtml(HtmlPage* page) const;
 };
 
 class CDFPlot : public Plot {
@@ -127,7 +129,7 @@ class CDFPlot : public Plot {
     data_series_.back().data = std::move(*data);
   }
 
-  void PlotToDir(const std::string& location) override;
+  void PlotToDir(const std::string& location) const override;
 
  protected:
   PlotParameters1D params_;
@@ -171,7 +173,7 @@ class LinePlot : public Plot {
     data_series_.back().data = std::move(*data);
   }
 
-  void PlotToDir(const std::string& location) override;
+  void PlotToDir(const std::string& location) const override;
 
  protected:
   PlotParameters2D params_;
@@ -186,7 +188,7 @@ class StackedLinePlot : public LinePlot {
                   const PlotParameters2D& params = {})
       : LinePlot(params), xs_(xs) {}
 
-  void PlotToDir(const std::string& location) override;
+  void PlotToDir(const std::string& location) const override;
 
  private:
   const std::vector<double> xs_;
@@ -200,7 +202,7 @@ class BarPlot : public CDFPlot {
           const PlotParameters1D& params = {})
       : CDFPlot(params), categories_(categories) {}
 
-  void PlotToDir(const std::string& location) override;
+  void PlotToDir(const std::string& location) const override;
 
  private:
   const std::vector<std::string> categories_;
@@ -225,7 +227,7 @@ class HeatmapPlot : public Plot {
     data_series_.back().data = std::move(*data);
   }
 
-  void PlotToDir(const std::string& location) override;
+  void PlotToDir(const std::string& location) const override;
 
  private:
   PlotParameters2D params_;

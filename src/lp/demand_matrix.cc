@@ -260,13 +260,15 @@ bool DemandMatrix::IsFeasible(const net::GraphLinkSet& to_exclude,
 
 double DemandMatrix::MaxCommodityScaleFactor(
     const net::GraphLinkSet& to_exclude, double capacity_multiplier) const {
+  CHECK(TotalLoad() != nc::net::Bandwidth::Zero());
   MinMaxProblem max_flow_problem(
       graph_, GetCapacities(to_exclude, capacity_multiplier, *graph_), true);
   for (const DemandMatrixElement& element : elements_) {
     max_flow_problem.AddDemand(element.src, element.dst, element.demand.Mbps());
   }
 
-  return 1.0 / max_flow_problem.Solve();
+  double link_utilization = max_flow_problem.Solve();
+  return 1.0 / link_utilization;
 }
 
 bool DemandMatrix::ResilientToFailures() const {
