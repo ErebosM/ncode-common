@@ -103,6 +103,8 @@ class Plot {
 
   std::string PlotToSVG() const;
 
+  void PlotToSVGFile(const std::string& filename) const;
+
   // Generates an SVG plot and embeds it in a web page.
   void PlotToHtml(HtmlPage* page) const;
 };
@@ -211,7 +213,8 @@ class BarPlot : public CDFPlot {
 // A heatmap plot.
 class HeatmapPlot : public Plot {
  public:
-  HeatmapPlot(const PlotParameters2D& params = {}) : params_(params) {}
+  HeatmapPlot(const PlotParameters2D& params = {})
+      : params_(params), symlog_(false) {}
 
   void AddData(const std::vector<double>& data) {
     std::vector<double> data_cpy = data;
@@ -229,8 +232,15 @@ class HeatmapPlot : public Plot {
 
   void PlotToDir(const std::string& location) const override;
 
+  bool symlog() const { return symlog_; }
+
+  void set_symlog(bool symlog) { symlog_ = symlog; }
+
  private:
   PlotParameters2D params_;
+
+  // If true data will be symlogged.
+  bool symlog_;
 
   // The data will consist of rows of the same length with no labels.
   std::vector<DataSeries1D> data_series_;

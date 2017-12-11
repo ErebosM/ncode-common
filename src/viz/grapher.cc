@@ -42,6 +42,7 @@ static constexpr char kPythonGrapherStackedPlot[] = "stacked_plot";
 static constexpr char kPythonGrapherLinePlot[] = "line_plot";
 static constexpr char kPythonGrapherBarPlot[] = "bar_plot";
 static constexpr char kPythonGrapherHMapPlot[] = "hmap_plot";
+static constexpr char kPythonGrapherHMapPlotLogScaleMarker[] = "log_scale";
 static constexpr char kPythonNpyDump[] = "npy_dump";
 static constexpr char kPythonNpyDumpDTypeMarker[] = "dtype";
 static constexpr char kPythonGrapherCategoriesMarker[] = "categories";
@@ -291,9 +292,23 @@ void LinePlot::PlotToDir(const std::string& output) const {
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
+// Samples a set of values. The vector will contain at most
+// kMaxPythonCDFDatapoints values.
+static void CDFSample(std::vector<double>* v) {
+  if (v->size() <= kMaxPythonCDFDatapoints) {
+    return;
+  }
+
+  std::vector<double> new_values = Percentiles(v, kMaxPythonCDFDatapoints);
+  std::swap(*v, new_values);
+}
+
 void CDFPlot::PlotToDir(const std::string& output) const {
   std::vector<DataSeries1D> data_series =
       Preprocess1DData(params_.scale, data_series_);
+  for (auto& series : data_series) {
+    CDFSample(&series.data);
+  }
 
   std::unique_ptr<ctemplate::TemplateDictionary> dictionary =
       PlotCommon(params_, data_series_, output);
@@ -345,12 +360,19 @@ void HeatmapPlot::PlotToDir(const std::string& output) const {
       params_, Preprocess1DData(params_.x_scale, data_series_), output);
   dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
   dictionary->SetValue(kPythonGrapherYLabelMarker, params_.y_label);
+  dictionary->SetValue(kPythonGrapherHMapPlotLogScaleMarker,
+                       symlog_ ? "True" : "False");
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherHMapPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
+}
+
+void Plot::PlotToSVGFile(const std::string& filename) const {
+  std::string svg = PlotToSVG();
+  nc::File::WriteStringToFileOrDie(svg, filename);
 }
 
 std::string Plot::PlotToSVG() const {

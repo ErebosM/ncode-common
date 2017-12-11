@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import argparse
 from io import BytesIO
+import matplotlib.colors as colors
 
 parser = argparse.ArgumentParser(description='Plots a CDF')
 parser.add_argument('--dump_svg', type=bool, default=False,
@@ -20,7 +21,12 @@ for x_pos, label in {{lines_and_labels}}:
     plt.axvline(x_pos, label=label, color=next_color)
 
 fig = plt.gcf()
-im = ax.imshow(all_data, cmap='hot', interpolation='nearest')
+
+if {{log_scale}}:
+    im = ax.imshow(all_data, norm=colors.SymLogNorm(1.0, vmin=np.min(all_data), vmax=np.max(all_data)),
+                   cmap='hot', interpolation='nearest')
+else:
+    im = ax.imshow(all_data, cmap='hot', interpolation='nearest')
 fig.colorbar(im)
 
 plt.title('{{title}}')
