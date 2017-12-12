@@ -280,4 +280,75 @@ bool File::ReadLines(const std::string& name,
   return true;
 }
 
+void WalkRecursively(
+    const std::string& dname,
+    std::function<void(const std::string& root,
+                       const std::vector<std::string>& filenames,
+                       const std::vector<std::string>& dirnames)> callback) {
+  struct dirent* dent;
+  DIR* dir;
+  std::string filename;
+
+  dir = opendir(dname.c_str());
+  CHECK(dir != nullptr) << "Unable to open directory " << dname;
+
+  std::vector<std::string> filenames;
+  std::vector<std::string> dirnames;
+  while ((dent = readdir(dir))) {
+    if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) {
+      continue;
+    }
+
+    if (dent->d_type == DT_REG) {
+      filenames.emplace_back(dent->d_name);
+    } else if (dent->d_type == DT_DIR) {
+      dirnames.emplace_back(dent->d_name);
+    }
+  }
+  closedir(dir);
+
+  callback(dname, filenames, dirnames);
+  for (const std::string& dirname : dirnames) {
+    std::string full_name = nc::StrCat(dname, "/", dirname);
+    WalkRecursively(full_name, callback);
+  }
+}
+
+void File::Walk(
+    const std::string& starting_root,
+    std::function<void(const std::string& root,
+                       const std::vector<std::string>& filenames,
+                       const std::vector<std::string>& dirnames)> callback) {
+  WalkRecursively(starting_root, callback);
+}
+
+std::vector<std::string> File::GetFilesWithExtension(
+    const std::string& root, const std::string& extension) {
+  bool is_directory = false;
+  CHECK(File::FileOrDirectory(root, &is_directory));
+
+  std::vector<std::string> out;
+  if (!is_directory) {
+    if (HasSuffixString(root, extension)) {
+      out.emplace_back(root);
+    }
+
+    return out;
+  }
+
+  File::Walk(root,
+             [&out, &extension](const std::string& root,
+                                const std::vector<std::string>& filenames,
+                                const std::vector<std::string>& dirnames) {
+               nc::Unused(dirnames);
+               for (const std::string& filename : filenames) {
+                 if (HasSuffixString(filename, extension)) {
+                   out.emplace_back(nc::StrCat(root, "/", filename));
+                 }
+               }
+             });
+
+  return out;
+}
+
 }  // namespace nc

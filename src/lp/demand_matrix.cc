@@ -1,10 +1,10 @@
 #include "demand_matrix.h"
 
-#include <chrono>
-#include <cmath>
+#include <functional>
 #include <iterator>
 #include <tuple>
 
+#include "../file.h"
 #include "../map_util.h"
 #include "../perfect_hash.h"
 #include "../stats.h"
@@ -319,7 +319,7 @@ static uint32_t ParseCountOrDie(const std::string& tag,
   return count;
 }
 
-std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaOrDie(
+std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaStringOrDie(
     const std::string& matrix_string,
     const std::vector<std::string>& node_names,
     const net::GraphStorage* graph) {
@@ -380,7 +380,41 @@ std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaOrDie(
   return make_unique<DemandMatrix>(std::move(elements), graph);
 }
 
-std::string DemandMatrix::ToRepetita(
+static std::string GetPropertiesFileName(const std::string& matrix_file) {
+  // Will strip the file's extension and replace it with .properties
+  auto dot_location = matrix_file.find_last_of('.');
+  std::string prop_file = matrix_file;
+  if (dot_location != std::string::npos) {
+    prop_file = matrix_file.substr(0, dot_location);
+  }
+  StrAppend(&prop_file, ".properties");
+
+  return prop_file;
+}
+
+std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaFileOrDie(
+    const std::string& matrix_file, const std::vector<std::string>& node_names,
+    const net::GraphStorage* graph) {
+  std::string prop_file = GetPropertiesFileName(matrix_file);
+
+  std::unique_ptr<DemandMatrix> demand_matrix = LoadRepetitaStringOrDie(
+      nc::File::ReadFileToStringOrDie(matrix_file), node_names, graph);
+
+  if (File::Exists(prop_file)) {
+    File::ReadLines(prop_file, [&demand_matrix](const std::string& line) {
+      std::vector<std::string> key_and_value = nc::Split(line, " ");
+      if (key_and_value.size() != 2) {
+        return;
+      }
+
+      demand_matrix->UpdateProperty(key_and_value[0], key_and_value[1]);
+    });
+  }
+
+  return demand_matrix;
+}
+
+std::string DemandMatrix::ToRepetitaString(
     const std::vector<std::string>& node_names) const {
   // node_names contains the nodes, as they were ordered in the topology file.
   // Need to be able to refer to them by the index in the topology file.
@@ -407,6 +441,22 @@ std::string DemandMatrix::ToRepetita(
   }
 
   return out;
+}
+
+void DemandMatrix::ToRepetitaFileOrDie(
+    const std::vector<std::string>& node_names,
+    const std::string& matrix_file) const {
+  nc::File::WriteStringToFileOrDie(ToRepetitaString(node_names), matrix_file);
+  if (properties_.empty()) {
+    return;
+  }
+
+  std::string prop_file = GetPropertiesFileName(matrix_file);
+  std::string prop_string;
+  for (const auto& key_and_value : properties_) {
+    prop_string += StrCat(key_and_value.first, " ", key_and_value.second, "\n");
+  }
+  nc::File::WriteStringToFileOrDie(prop_string, prop_file);
 }
 
 }  // namespace lp

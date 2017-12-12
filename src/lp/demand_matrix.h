@@ -40,8 +40,16 @@ class DemandMatrix {
   // https://bitbucket.org/StevenGay/repetita/src. Will return empty unique
   // pointer if there is a mismatch between the topology and the TM. Will die if
   // there is a parsing error.
-  static std::unique_ptr<DemandMatrix> LoadRepetitaOrDie(
+  static std::unique_ptr<DemandMatrix> LoadRepetitaStringOrDie(
       const std::string& matrix_string,
+      const std::vector<std::string>& node_names,
+      const net::GraphStorage* graph);
+
+  // Like above, but will load the matrix directly from a file. Will also try to
+  // populate properties from a file named the same way but with the .properties
+  // extension.
+  static std::unique_ptr<DemandMatrix> LoadRepetitaFileOrDie(
+      const std::string& matrix_file,
       const std::vector<std::string>& node_names,
       const net::GraphStorage* graph);
 
@@ -147,13 +155,31 @@ class DemandMatrix {
 
   // Serializes this demand matrix into the format from
   // https://bitbucket.org/StevenGay/repetita/src.
-  std::string ToRepetita(const std::vector<std::string>& node_names) const;
+  std::string ToRepetitaString(
+      const std::vector<std::string>& node_names) const;
+
+  // Like above, but will write the matrix to a file. Will also serialize
+  // properties in .properties file.
+  void ToRepetitaFileOrDie(const std::vector<std::string>& node_names,
+                           const std::string& filename) const;
 
   const net::GraphStorage* graph() const { return graph_; }
+
+  // Adds meta information to this demand matrix.
+  void UpdateProperty(const std::string& key, const std::string& value) {
+    properties_[key] = value;
+  }
+
+  const std::map<std::string, std::string>& properties() const {
+    return properties_;
+  }
 
  private:
   std::vector<DemandMatrixElement> elements_;
   const net::GraphStorage* graph_;
+
+  // A generic list of properties. They contain meta information for the matrix.
+  std::map<std::string, std::string> properties_;
 
   DISALLOW_COPY_AND_ASSIGN(DemandMatrix);
 };

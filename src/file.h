@@ -119,6 +119,19 @@ class File {
     return WriteStringToFile(contents, name);
   }
 
+  // Mimics Python's os.walk, never follows symlinks, always top-bottom.
+  static void Walk(
+      const std::string& starting_root,
+      std::function<void(const std::string& root,
+                         const std::vector<std::string>& filenames,
+                         const std::vector<std::string>& dirnames)>);
+
+  // Recursively returns all files that share a given extension from a root. If
+  // 'root' points to a file and this file has the extension a vector of size
+  // one is returned with the file.
+  static std::vector<std::string> GetFilesWithExtension(
+      const std::string& root, const std::string& extension);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(File);
 };
