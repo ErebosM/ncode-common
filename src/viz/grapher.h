@@ -48,6 +48,8 @@ struct ColoredRange {
 
 // Parameters for a plot.
 struct PlotParameters {
+  PlotParameters(const std::string& title) : title(title) {}
+
   PlotParameters() {}
 
   // Title of the plot.
@@ -64,6 +66,15 @@ struct PlotParameters {
 
 // Parameters for a 2d line plot.
 struct PlotParameters2D : public PlotParameters {
+  PlotParameters2D(const std::string& title, const std::string& x_label,
+                   const std::string& y_label)
+      : PlotParameters(title),
+        x_scale(1.0),
+        y_scale(1.0),
+        x_bin_size(1),
+        x_label(x_label),
+        y_label(y_label) {}
+
   PlotParameters2D() : x_scale(1.0), y_scale(1.0), x_bin_size(1) {}
 
   // X/Y values will be multiplied by these numbers before plotting.
@@ -83,6 +94,9 @@ struct PlotParameters2D : public PlotParameters {
 
 // Parameters for a CDF or a bar plot.
 struct PlotParameters1D : public PlotParameters {
+  PlotParameters1D(const std::string& title, const std::string& data_label)
+      : PlotParameters(title), scale(1.0), data_label(data_label) {}
+
   PlotParameters1D() : scale(1.0) {}
 
   // Values will be multiplied by this number before plotting.
@@ -119,10 +133,14 @@ class CDFPlot : public Plot {
     data_series_.insert(data_series_.end(), data.begin(), data.end());
   }
 
-  void AddData(const std::string& label, const std::vector<double>& data) {
+  template <typename T>
+  void AddData(const std::string& label, const std::vector<T>& data) {
     data_series_.emplace_back();
     data_series_.back().label = label;
-    data_series_.back().data = data;
+
+    for (size_t i = 0; i < data.size(); ++i) {
+      data_series_.back().data.emplace_back(static_cast<double>(data[i]));
+    }
   }
 
   void AddData(const std::string& label, std::vector<double>* data) {

@@ -289,6 +289,7 @@ void LinePlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherLinePlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
+  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -319,6 +320,7 @@ void CDFPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherCDFPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
+  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -335,6 +337,7 @@ void StackedLinePlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherStackedPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
+  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -349,6 +352,7 @@ void BarPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherBarPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
+  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -367,6 +371,7 @@ void HeatmapPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherHMapPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
+  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 

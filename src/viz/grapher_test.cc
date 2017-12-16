@@ -195,7 +195,7 @@ TEST(PerPeriodClassifier, MultiValue) {
 
 TEST(PythonOutput, CDF) {
   CDFPlot cdf_plot;
-  cdf_plot.AddData("", {1.0, 2.0, 4.0, 3.0, 5.0});
+  cdf_plot.AddData<double>("", {1.0, 2.0, 4.0, 3.0, 5.0});
 
   HtmlPage page;
   cdf_plot.PlotToHtml(&page);
@@ -217,8 +217,8 @@ TEST(PythonOutput, StackedLine) {
 
 TEST(PythonOutput, Bar) {
   BarPlot plot({"D1", "D2", "D3", "D4", "D5"});
-  plot.AddData("series one", {1.0, 2.0, 4.0, 3.0, 5.0});
-  plot.AddData("series two", {4.0, 2.0, 8.0, 1.0, 6.0});
+  plot.AddData<double>("series one", {1.0, 2.0, 4.0, 3.0, 5.0});
+  plot.AddData<double>("series two", {4.0, 2.0, 8.0, 1.0, 6.0});
 
   HtmlPage page;
   plot.PlotToHtml(&page);
