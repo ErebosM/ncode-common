@@ -191,25 +191,25 @@ static std::string DelayToStr(Delay delay) {
 
 std::string GraphStats::ToString() {
   std::string link_capacities_str = Substitute(
-      "[min: $0 Mbps, 50p: $1 Mbps, 90p: $2 Mbps, max: $3 Mbps]",
+      "[min: $0 Mbps, med: $1 Mbps, 90p: $2 Mbps, max: $3 Mbps]",
       link_capacity_percentiles[0].Mbps(), link_capacity_percentiles[50].Mbps(),
       link_capacity_percentiles[90].Mbps(),
       link_capacity_percentiles[100].Mbps());
 
   std::string link_delays_str =
-      Substitute("[min: $0, 50p: $1, 90p: $2, max: $3]",
+      Substitute("[min: $0, med: $1, 90p: $2, max: $3]",
                  DelayToStr(link_delay_percentiles[0]),
                  DelayToStr(link_delay_percentiles[50]),
                  DelayToStr(link_delay_percentiles[90]),
                  DelayToStr(link_delay_percentiles[100]));
 
   std::string in_degree_str = Substitute(
-      "[min: $0, 50p: $1, 90p: $2, max: $3]", node_in_degree_percentiles[0],
+      "[min: $0, med: $1, 90p: $2, max: $3]", node_in_degree_percentiles[0],
       node_in_degree_percentiles[50], node_in_degree_percentiles[90],
       node_in_degree_percentiles[100]);
 
   std::string out_degree_str = Substitute(
-      "[min: $0, 50p: $1, 90p: $2, max: $3]", node_out_degree_percentiles[0],
+      "[min: $0, med: $1, 90p: $2, max: $3]", node_out_degree_percentiles[0],
       node_out_degree_percentiles[50], node_out_degree_percentiles[90],
       node_out_degree_percentiles[100]);
 

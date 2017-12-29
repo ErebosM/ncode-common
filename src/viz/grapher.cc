@@ -15,6 +15,7 @@
 #include "../map_util.h"
 #include "../stats.h"
 #include "../strutil.h"
+#include "../substitute.h"
 #include "web_page.h"
 #include "ctemplate/template.h"
 #include "ctemplate/template_dictionary.h"
@@ -67,6 +68,9 @@ static std::mutex kExecuteMutex;
 // Command that can be used to get SVG output out of a plotting script.
 static constexpr char kSVGCommand[] = "python plot.py --dump_svg True";
 
+// Command to zip all contents of a directory into a .tgz
+static constexpr char kZipCommand[] = "tar -zcvf $0 .";
+
 // Samples approximately N values at random, preserving order.
 template <typename T>
 static std::vector<T> SampleRandom(const std::vector<T>& values, size_t n) {
@@ -105,6 +109,7 @@ static std::string ExecuteInDirectory(const std::string& cmd,
   }
 
   CHECK(chdir(current_cwd.data()) == 0);
+  CHECK(pclose(in) != -1);
   return result;
 }
 
@@ -289,7 +294,6 @@ void LinePlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherLinePlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -320,7 +324,6 @@ void CDFPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherCDFPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -337,7 +340,6 @@ void StackedLinePlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherStackedPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -352,7 +354,6 @@ void BarPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherBarPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -371,7 +372,6 @@ void HeatmapPlot::PlotToDir(const std::string& output) const {
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherHMapPlot,
                                   ctemplate::DO_NOT_STRIP, dictionary.get(),
                                   &script));
-  File::RecursivelyCreateDir(File::ExtractDirectoryName(output), 0777);
   File::WriteStringToFileOrDie(script, StrCat(output, "/plot.py"));
 }
 
@@ -385,6 +385,22 @@ std::string Plot::PlotToSVG() const {
   PlotToDir(tmp_dir);
   std::string svg = ExecuteInDirectory(kSVGCommand, tmp_dir);
   return svg;
+}
+
+void Plot::PlotToArchiveFile(const std::string& filename) const {
+  CHECK(!filename.empty());
+  std::string abs_filename = filename;
+  if (filename.front() != '/') {
+    // Path is relative to cwd, need to prepend the current working directory.
+    std::array<char, kChunkSize> cwd;
+    CHECK(getcwd(cwd.data(), kChunkSize) != NULL);
+    abs_filename = nc::StrCat(cwd.data(), "/", filename);
+  }
+
+  std::string tmp_dir = GetTmpDirectory();
+  PlotToDir(tmp_dir);
+  ExecuteInDirectory(nc::Substitute(kZipCommand, abs_filename), tmp_dir);
+  return;
 }
 
 void Plot::PlotToHtml(HtmlPage* page) const {

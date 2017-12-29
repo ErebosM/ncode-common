@@ -121,6 +121,9 @@ class Plot {
 
   // Generates an SVG plot and embeds it in a web page.
   void PlotToHtml(HtmlPage* page) const;
+
+  // Same as PlotToDir, but will zip the resulting directory.
+  void PlotToArchiveFile(const std::string& filename) const;
 };
 
 class CDFPlot : public Plot {

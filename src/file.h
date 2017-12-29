@@ -81,7 +81,8 @@ class File {
   // Same as above, but crash on failure.
   static void WriteStringToFileOrDie(const std::string& contents,
                                      const std::string& name,
-                                     bool append = false);
+                                     bool append = false,
+                                     bool create_parents = true);
 
   // Create a directory.
   static bool CreateDir(const std::string& name, int mode);

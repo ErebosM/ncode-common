@@ -148,7 +148,13 @@ bool File::WriteStringToFile(const std::string& contents,
 }
 
 void File::WriteStringToFileOrDie(const std::string& contents,
-                                  const std::string& name, bool append) {
+                                  const std::string& name, bool append,
+                                  bool create_parents) {
+  if (create_parents) {
+    std::string dir_name = ExtractDirectoryName(name);
+    RecursivelyCreateDir(dir_name, 0777);
+  }
+
   const char* mode = "wb";
   if (append) {
     mode = "ab";
