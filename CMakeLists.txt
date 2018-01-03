@@ -1,17 +1,23 @@
 cmake_minimum_required(VERSION 2.8.7)
 
-# If there is already a target called ncode_common someone has already
-# added this project. Will ignore.
-if(TARGET ncode_common)
-    return()
-endif(TARGET ncode_common)
+project(NCode)
 
-project(NCodeCommon)
-option(NCODE_DISABLE_TESTS "If tests should be compiled or not" ON)
-option(NCODE_DISABLE_BENCHMARKS "If benchmarks should be compiled or not" ON)
-option(NCODE_DEBUG "A debug build" OFF)
+if (APPLE)
+   set(CMAKE_MACOSX_RPATH 1)
+endif()
+
+option(NCODE_DISABLE_TESTS "If tests should be compiled or not" OFF)
+option(NCODE_DISABLE_BENCHMARKS "If benchmarks should be compiled or not" OFF)
 option(NCODE_ASAN "Compile with ASAN on" OFF)
 option(NCODE_TSAN "Compile with TSAN on" OFF)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE "Release" CACHE
+      STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+endif()
 
 set(NCODE_BASE_FLAGS "-g -std=c++11 -pedantic-errors -Winit-self -Woverloaded-virtual -Wuninitialized -Wall -Wextra -fno-exceptions -D_FILE_OFFSET_BITS=64")
 set(NCODE_BASE_LD_FLAGS "")
@@ -24,13 +30,8 @@ if (NCODE_TSAN)
    set(NCODE_BASE_LD_FLAGS "${NCODE_BASE_LD_FLAGS} -fsanitize=thread")
 endif()
 
-if (NCODE_DEBUG)
-  set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -O0 -fno-omit-frame-pointer")
-else()
-  set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -O3 -march=native -DNDEBUG")
-endif()
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${NCODE_BASE_FLAGS}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${NCODE_BASE_FLAGS} -O0 -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_DEBUG} ${NCODE_BASE_FLAGS} -march=native -DNDEBUG")
 set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} ${NCODE_BASE_LD_FLAGS}")
 
 if (NOT NCODE_DISABLE_TESTS)
@@ -109,7 +110,7 @@ configure_file(
 include_directories(${OPTIMIZER_INCLUDE_DIRS} ${PROJECT_BINARY_DIR})
 
 # Common functionality
-set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h)
+set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h src/circular_array.h src/thread_runner.h)
 add_library(ncode_common OBJECT src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc ${NCODE_COMMON_HEADER_FILES})
 
 # Graph algorithms and pcap interface
@@ -130,6 +131,20 @@ add_library(ctemplate OBJECT src/viz/ctemplate/template.cc
             src/viz/ctemplate/htmlparser/statemachine.cc
             src/viz/ctemplate/base/arena.cc)
 
+set(CTEMPLATE_HEADER_FILES src/viz/ctemplate/template.h
+            src/viz/ctemplate/template_dictionary.h
+            src/viz/ctemplate/template_dictionary_interface.h
+            src/viz/ctemplate/template_namelist.h
+            src/viz/ctemplate/template_modifiers.h
+            src/viz/ctemplate/template_annotator.h
+            src/viz/ctemplate/template_pathops.h
+            src/viz/ctemplate/per_expand_data.h
+            src/viz/ctemplate/template_string.h
+            src/viz/ctemplate/template_cache.h
+            src/viz/ctemplate/template_emitter.h
+            src/viz/ctemplate/template_enums.h
+            src/viz/ctemplate/str_ref.h)
+
 # Silence warnings about unused stuff in ctemplates
 set_target_properties(ctemplate PROPERTIES COMPILE_FLAGS
                       "-Wno-unused-parameter -Wno-unused-const-variable -Wno-sign-compare -Wno-unused-private-field")
@@ -143,11 +158,22 @@ set(LP_HEADER_FILES src/lp/lp.h src/lp/mc_flow.h src/lp/demand_matrix.h)
 add_library(ncode_lp OBJECT src/lp/lp.cc src/lp/mc_flow.cc src/lp/demand_matrix.cc)
 
 # HTSim
-set(SIM_HEADER_FILES src/htsim/match.h src/htsim/packet.h src/htsim/htsim.h src/htsim/bulk_gen.h src/htsim/animator.h src/htsim/queue.h src/htsim/pcap_consumer.h src/htsim/tcp.h src/htsim/udp.h /src/htsim/network.h src/htsim/flow_driver.h src/htsim/flow_counter.h src/htsim/physical.h)
+set(HTSIM_HEADER_FILES src/htsim/match.h src/htsim/packet.h src/htsim/htsim.h src/htsim/bulk_gen.h src/htsim/animator.h src/htsim/queue.h src/htsim/pcap_consumer.h src/htsim/tcp.h src/htsim/udp.h src/htsim/network.h src/htsim/flow_driver.h src/htsim/flow_counter.h src/htsim/physical.h)
 add_library(ncode_htsim OBJECT src/htsim/match.cc src/htsim/packet.cc src/htsim/bulk_gen.cc src/htsim/animator.cc src/htsim/queue.cc src/htsim/pcap_consumer.cc src/htsim/tcp.cc src/htsim/udp.cc src/htsim/network.cc src/htsim/flow_driver.cc src/htsim/flow_counter.cc src/htsim/physical.cc)
 
-add_library(ncode STATIC $<TARGET_OBJECTS:ncode_common> $<TARGET_OBJECTS:ncode_net> $<TARGET_OBJECTS:ctemplate> $<TARGET_OBJECTS:ncode_viz> $<TARGET_OBJECTS:ncode_lp> $<TARGET_OBJECTS:ncode_htsim>)
+add_library(ncode SHARED $<TARGET_OBJECTS:ncode_common> $<TARGET_OBJECTS:ncode_net> $<TARGET_OBJECTS:ctemplate> $<TARGET_OBJECTS:ncode_viz> $<TARGET_OBJECTS:ncode_lp> $<TARGET_OBJECTS:ncode_htsim>)
 target_link_libraries(ncode ${PCAP_LIBRARY} ${OPTIMIZER_LIBRARIES})
+
+install(TARGETS ncode
+	LIBRARY DESTINATION lib 
+	ARCHIVE DESTINATION lib/static)
+
+install(FILES ${NCODE_COMMON_HEADER_FILES} DESTINATION include/ncode)
+install(FILES ${NET_HEADER_FILES} DESTINATION include/ncode/net)
+install(FILES ${VIZ_HEADER_FILES} DESTINATION include/ncode/viz)
+install(FILES ${LP_HEADER_FILES} DESTINATION include/ncode/lp)
+install(FILES ${HTSIM_HEADER_FILES} DESTINATION include/ncode/htsim)
+install(FILES ${CTEMPLATE_HEADER_FILES} DESTINATION include/ncode/viz/ctemplate)
 
 if (NOT NCODE_DISABLE_TESTS)
    set_property(SOURCE src/stringpiece_test.cc APPEND_STRING PROPERTY COMPILE_FLAGS "-Wno-conversion-null -Wno-sign-compare")

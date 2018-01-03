@@ -233,8 +233,8 @@ TEST(MCTest, SimpleScaleFactor) {
   problem.AddDemand("N0", "N1");
   ASSERT_EQ(0, problem.MaxDemandScaleFactor());
 
-  problem.AddDemand("N1", "N0", BW(8000).Mbps());
-  ASSERT_NEAR(1250000, problem.MaxDemandScaleFactor(), 0.1);
+  problem.AddDemand("N1", "N0", BW(80000).Mbps());
+  ASSERT_NEAR(125000, problem.MaxDemandScaleFactor(), 0.1);
 }
 
 TEST(MCTest, SimpleIncrement) {

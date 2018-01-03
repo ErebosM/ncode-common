@@ -114,11 +114,13 @@ std::string HtmlPage::ConstructHead() const {
                          script_location));
   }
 
-  StrAppend(
-      &return_string,
-      Substitute("<script type='text/javascript'>window.onload=function() "
-                 "{$0};</script>",
-                 onload_.raw()));
+  if (!onload_.raw().empty()) {
+    StrAppend(
+        &return_string,
+        Substitute("<script type='text/javascript'>window.onload=function() "
+                   "{$0};</script>",
+                   onload_.raw()));
+  }
 
   if (std::find(scripts_.begin(), scripts_.end(), kJQueryUIJS) !=
       scripts_.end()) {
