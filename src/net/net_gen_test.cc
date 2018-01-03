@@ -167,30 +167,29 @@ TEST(Load, Repetita) {
       LoadRepetitaOrDie(test_topology, &nodes_in_order, &locations);
 
   ASSERT_EQ(4ul, builder.links().size());
-  ASSERT_EQ("7_ITB_2", builder.links().front().src_id());
-  ASSERT_EQ("2_KEIO_1", builder.links().front().dst_id());
+  ASSERT_EQ("7_ITB", builder.links().front().src_id());
+  ASSERT_EQ("2_KEIO", builder.links().front().dst_id());
   ASSERT_EQ(Bandwidth::FromKBitsPerSecond(1000000),
             builder.links().front().bandwidth());
   ASSERT_EQ(microseconds(10), builder.links().front().delay());
-  ASSERT_EQ("7_ITB_2", builder.links().back().dst_id());
+  ASSERT_EQ("7_ITB", builder.links().back().dst_id());
 
   std::map<std::string, std::pair<double, double>> model_locations;
-  model_locations["0_UNIBRAW_0"] = {1.0, 2.0};
-  model_locations["2_KEIO_1"] = {3.0, 4.0};
-  model_locations["7_ITB_2"] = {5.0, 6.0};
+  model_locations["0_UNIBRAW"] = {1.0, 2.0};
+  model_locations["2_KEIO"] = {3.0, 4.0};
+  model_locations["7_ITB"] = {5.0, 6.0};
   ASSERT_EQ(model_locations, locations);
 
-  std::vector<std::string> model = {"0_UNIBRAW_0", "2_KEIO_1", "7_ITB_2"};
+  std::vector<std::string> model = {"0_UNIBRAW", "2_KEIO", "7_ITB"};
   ASSERT_EQ(nodes_in_order, model);
 
   std::string serialized_back = builder.ToRepetita();
-  LOG(ERROR) << serialized_back;
   std::string serialized_test_topology =
       "NODES 3\n"
       "label x y\n"
-      "0_UNIBRAW_0 0 0\n"
-      "2_KEIO_1 0 0\n"
-      "7_ITB_2 0 0\n"
+      "0_UNIBRAW 0 0\n"
+      "2_KEIO 0 0\n"
+      "7_ITB 0 0\n"
       "\n"
       "EDGES 4\n"
       "label src dest weight bw delay\n"

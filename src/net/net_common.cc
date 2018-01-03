@@ -848,14 +848,16 @@ std::string GraphBuilder::ToRepetita(
     StrAppend(&out, "NODES ", node_count, "\nlabel x y\n");
     for (const std::string& node : nodes) {
       StrAppend(&out, node, " 0 0\n");
-      indices[node] = indices.size();
+      size_t next_index = indices.size();
+      indices[node] = next_index;
     }
   } else {
     uint32_t node_count = node_order.size();
     StrAppend(&out, "NODES ", node_count, "\nlabel x y\n");
     for (const std::string& node : node_order) {
       StrAppend(&out, node, " 0 0\n");
-      indices[node] = indices.size();
+      size_t next_index = indices.size();
+      indices[node] = next_index;
     }
   }
 

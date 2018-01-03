@@ -515,14 +515,21 @@ GraphBuilder LoadRepetitaOrDie(
   ++it;
 
   std::vector<std::string> nodes;
+  std::set<std::string> nodes_set;
   for (uint32_t i = 0; i < num_nodes; ++i) {
     ++it;
 
     std::vector<std::string> line_split = Split(*it, " ");
     CHECK(line_split.size() == 3);
+    std::string node_id = line_split[0];
 
-    const std::string& node_id = StrCat(line_split[0], "_", i);
+    // If the node id is not unique, need to make it unique.
+    uint32_t k = 1;
+    while (nc::ContainsKey(nodes_set, node_id)) {
+      node_id = StrCat(line_split[0], "_", ++k);
+    }
     nodes.emplace_back(node_id);
+    nodes_set.insert(node_id);
 
     if (locations == nullptr) {
       continue;
