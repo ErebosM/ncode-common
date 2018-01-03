@@ -20,11 +20,12 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 set(NCODE_BASE_FLAGS "-g -std=c++11 -pedantic-errors -Winit-self -Woverloaded-virtual -Wuninitialized -Wall -Wextra -fno-exceptions -D_FILE_OFFSET_BITS=64")
+set(NCODE_BASE_LD_FLAGS "")
 if (UNIX)
   set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -fPIC")
+  set(NCODE_BASE_LD_FLAGS "${NCODE_BASE_LD_FLAGS} -lpthread")
 endif()
 
-set(NCODE_BASE_LD_FLAGS "")
 if (NCODE_ASAN)
    set(NCODE_BASE_FLAGS "${NCODE_BASE_FLAGS} -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls")
    set(NCODE_BASE_LD_FLAGS "${NCODE_BASE_LD_FLAGS} -fsanitize=address")
