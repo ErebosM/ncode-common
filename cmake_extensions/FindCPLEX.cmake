@@ -11,10 +11,10 @@ set(CPLEX_ROOT_DIR "" CACHE PATH "CPLEX root directory.")
 
 if(APPLE)
  file(GLOB CPLEX_INCLUDE_SEARCH_PATH "$ENV{HOME}/Applications/IBM/ILOG/*/cplex/include")
- file(GLOB CPLEX_LIB_SEARCH_PATH "$ENV{HOME}/Applications/IBM/ILOG/*/cplex/lib/x86-64_osx/static_pic")
+ file(GLOB CPLEX_LIB_SEARCH_PATH "/opt/ibm/ILOG/*/cplex/lib/x86-64_osx/static_pic")
 elseif(UNIX)
- file(GLOB CPLEX_SEARCH_PATHS "/opt/IBM/ILOG/*/cplex/include")
- file(GLOB CPLEX_LIB_SEARCH_PATH "$ENV{HOME}/Applications/IBM/ILOG/*/cplex/lib/x86-64_linux/static_pic")
+ file(GLOB CPLEX_INCLUDE_SEARCH_PATH "/opt/ibm/ILOG/*/cplex/include")
+ file(GLOB CPLEX_LIB_SEARCH_PATH "/opt/ibm/ILOG/*/cplex/lib/x86-64_linux/static_pic")
 endif()
 
 FIND_PATH(CPLEX_INCLUDE_DIR
