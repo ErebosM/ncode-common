@@ -297,6 +297,15 @@ GraphLinkIndex GraphStorage::LinkOrDie(const std::string& src,
   return GraphLinkIndex(0);
 }
 
+GraphLinkIndex GraphStorage::LinkOrDie(nc::net::GraphNodeIndex src,
+                                       nc::net::GraphNodeIndex dst) const {
+  CHECK(src != dst) << "Link source same as destination: " << src;
+  const std::vector<AdjacencyList::LinkInfo>& links =
+      adjacency_list_.GetNeighbors(src);
+  CHECK(!links.empty());
+  return links[0].link_index;
+}
+
 bool GraphStorage::HasLink(const std::string& src,
                            const std::string& dst) const {
   CHECK(!src.empty() && !dst.empty()) << "Link source or destination missing";

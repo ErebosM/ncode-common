@@ -480,6 +480,10 @@ class GraphStorage {
   GraphLinkIndex LinkOrDie(const std::string& src,
                            const std::string& dst) const;
 
+  // Same as above, but takes indices.
+  GraphLinkIndex LinkOrDie(nc::net::GraphNodeIndex src,
+                           nc::net::GraphNodeIndex dst) const;
+
   // Returns a pointer to the index of a node or null if there is no node with
   // that name.
   const GraphNodeIndex* NodeFromStringOrNull(const std::string& id) const;
