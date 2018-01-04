@@ -158,14 +158,6 @@ class SingleCommoditySingleSinkFlowProblem : public FlowProblem {
   net::GraphNodeMap<std::vector<FlowAndPath>> RecoverPaths(
       const VarMap& link_to_variables, const lp::Solution& solution) const;
 
-  // Helper function for RecoverPaths.
-  double RecoverPathsRecursive(double demand, net::GraphNodeIndex at_node,
-                               double overall_flow,
-                               net::GraphLinkMap<double>* flow_over_links,
-                               net::Links* links_so_far,
-                               net::GraphNodeSet* nodes_so_far_set,
-                               std::vector<FlowAndPath>* out) const;
-
   // The sink.
   net::GraphNodeIndex sink_;
 
@@ -204,6 +196,64 @@ class MinMaxProblem : public SingleCommodityFlowProblem {
   double Solve(std::map<SrcAndDst, std::vector<FlowAndPath>>* paths = nullptr);
 
   bool also_minimize_delay_;
+};
+
+// A generic (and slower) MCP, where each demand can have a separate weight.
+// There will be one variable per demand per link, as opposed to per link per
+// destination as in SingleCommodityFlowProblem, so only use if you need the
+// different weights.
+class MultiCommodityFlowProblem : public FlowProblem {
+ public:
+  MultiCommodityFlowProblem(const net::GraphLinkMap<double>& link_capacities,
+                            const nc::net::GraphStorage* graph)
+      : FlowProblem(link_capacities, graph) {}
+
+  // Source and destination of a demand.
+  using SrcAndDst = std::pair<nc::net::GraphNodeIndex, nc::net::GraphNodeIndex>;
+
+  // For each demand, the magnitude of the demand and its weight.
+  using DemandAndWeight = std::pair<double, double>;
+
+  // For each link a map from demand to LP variable.
+  using VarMap = net::GraphLinkMap<std::map<SrcAndDst, VariableIndex>>;
+
+  // Returns a map from a graph link to commodities over the link.
+  VarMap GetLinkToVariableMap(
+      Problem* problem, std::vector<ProblemMatrixElement>* problem_matrix);
+
+  // Adds flow conservation constraints to the problem.
+  void AddFlowConservationConstraints(
+      const VarMap& link_to_variables, Problem* problem,
+      std::vector<ProblemMatrixElement>* problem_matrix);
+
+  // Recovers the paths from a solution.
+  std::map<SrcAndDst, std::vector<FlowAndPath>> RecoverPathsFromSolution(
+      const VarMap& link_to_variables, const lp::Solution& solution) const;
+
+ protected:
+  // Demands, grouped by src, dst combination.
+  std::map<SrcAndDst, DemandAndWeight> demands_;
+};
+
+// An MCF that minimizes the total cost of all demands. Each link is associated
+// with a cost, and each demand has a weight. The total cost * weight across all
+// links is minmized.
+class MinCostMultiCommodityFlowProblem : public MultiCommodityFlowProblem {
+ public:
+  MinCostMultiCommodityFlowProblem(
+      const net::GraphLinkMap<double>& link_capacities,
+      const net::GraphLinkMap<double>& link_costs,
+      const nc::net::GraphStorage* graph)
+      : MultiCommodityFlowProblem(link_capacities, graph),
+        link_costs_(link_costs) {}
+
+  // Returns the cost, or double::max() if the problem is not feasible. If the
+  // problem is feasible and 'paths' is non-null will populate the map with
+  // paths that yield the minimal cost.
+  double Solve(std::map<SrcAndDst, std::vector<FlowAndPath>>* paths = nullptr);
+
+ private:
+  net::GraphLinkMap<double> link_costs_;
 };
 
 }  // namespace lp
