@@ -302,8 +302,14 @@ GraphLinkIndex GraphStorage::LinkOrDie(nc::net::GraphNodeIndex src,
   CHECK(src != dst) << "Link source same as destination: " << src;
   const std::vector<AdjacencyList::LinkInfo>& links =
       adjacency_list_.GetNeighbors(src);
-  CHECK(!links.empty());
-  return links[0].link_index;
+  for (const auto& link_info : links) {
+    if (link_info.dst_index == dst) {
+      return link_info.link_index;
+    }
+  }
+
+  LOG(FATAL) << "No link between " << src << " and " << dst;
+  return GraphLinkIndex(0);
 }
 
 bool GraphStorage::HasLink(const std::string& src,
