@@ -230,6 +230,12 @@ class MultiCommodityFlowProblem : public FlowProblem {
   std::map<SrcAndDst, std::vector<FlowAndPath>> RecoverPathsFromSolution(
       const VarMap& link_to_variables, const lp::Solution& solution) const;
 
+  // Adds a demand.
+  void AddDemand(net::GraphNodeIndex source, net::GraphNodeIndex dst,
+                 double demand, double weight) {
+    demands_[std::make_pair(source, dst)] = std::make_pair(demand, weight);
+  }
+
  protected:
   // Demands, grouped by src, dst combination.
   std::map<SrcAndDst, DemandAndWeight> demands_;
