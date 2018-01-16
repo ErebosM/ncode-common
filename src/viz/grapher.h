@@ -128,7 +128,8 @@ class Plot {
 
 class CDFPlot : public Plot {
  public:
-  CDFPlot(const PlotParameters1D& params = {}) : params_(params) {}
+  CDFPlot(const PlotParameters1D& params = {})
+      : params_(params), line_type_("-") {}
 
   void AddData(const DataSeries1D& data) { data_series_.emplace_back(data); }
 
@@ -156,12 +157,14 @@ class CDFPlot : public Plot {
 
  protected:
   PlotParameters1D params_;
+  std::string line_type_;
   std::vector<DataSeries1D> data_series_;
 };
 
 class LinePlot : public Plot {
  public:
-  LinePlot(const PlotParameters2D& params = {}) : params_(params) {}
+  LinePlot(const PlotParameters2D& params = {})
+      : params_(params), line_type_("-") {}
 
   void AddData(const std::vector<DataSeries2D>& data) {
     data_series_.insert(data_series_.end(), data.begin(), data.end());
@@ -198,8 +201,15 @@ class LinePlot : public Plot {
 
   void PlotToDir(const std::string& location) const override;
 
+  // Changes the line type to make this into a scatter plot.
+  void TurnIntoScatterPlot() { line_type_ = "o"; }
+
+  // Changes the line type to make points visible, as well as the lines.
+  void HighlightPoints() { line_type_ = "-o"; }
+
  protected:
   PlotParameters2D params_;
+  std::string line_type_;
   std::vector<DataSeries2D> data_series_;
 };
 

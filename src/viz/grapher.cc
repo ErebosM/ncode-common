@@ -10,6 +10,7 @@
 #include <memory>
 #include <random>
 #include <type_traits>
+#include <ftw.h>
 
 #include "../file.h"
 #include "../map_util.h"
@@ -50,6 +51,7 @@ static constexpr char kPythonGrapherCategoriesMarker[] = "categories";
 static constexpr char kPythonGrapherTitleMarker[] = "title";
 static constexpr char kPythonGrapherXLabelMarker[] = "xlabel";
 static constexpr char kPythonGrapherYLabelMarker[] = "ylabel";
+static constexpr char kLineTypeMarker[] = "line_type";
 static constexpr char kPythonGrapherFilesAndLabelsMarker[] = "files_and_labels";
 static constexpr char kPythonGrapherLinesAndLabelsMarker[] = "lines_and_labels";
 static constexpr char kPythonGrapherRangesMarker[] = "ranges";
@@ -118,6 +120,20 @@ static std::string GetTmpDirectory() {
   char dir_name[] = "/tmp/grapherXXXXXX";
   CHECK(mkdtemp(dir_name) != nullptr);
   return {dir_name};
+}
+
+static int RmFiles(const char* pathname, const struct stat* sbuf, int type,
+                   struct FTW* ftwb) {
+  Unused(sbuf);
+  Unused(type);
+  Unused(ftwb);
+  CHECK(remove(pathname) == 0) << "Unable to remove " << pathname;
+  return 0;
+}
+
+static void RemoveDirectory(const std::string& dir) {
+  std::unique_lock<std::mutex> lock(kExecuteMutex);
+  CHECK(nftw(dir.c_str(), RmFiles, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS) == 0);
 }
 
 static std::vector<DataSeries2D> Preprocess2DData(
@@ -289,6 +305,7 @@ void LinePlot::PlotToDir(const std::string& output) const {
       params_, Preprocess2DData(params_, data_series_), output);
   dictionary->SetValue(kPythonGrapherXLabelMarker, params_.x_label);
   dictionary->SetValue(kPythonGrapherYLabelMarker, params_.y_label);
+  dictionary->SetValue(kLineTypeMarker, line_type_);
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherLinePlot,
@@ -319,6 +336,7 @@ void CDFPlot::PlotToDir(const std::string& output) const {
       PlotCommon(params_, data_series_, output);
   dictionary->SetValue(kPythonGrapherXLabelMarker, params_.data_label);
   dictionary->SetValue(kPythonGrapherYLabelMarker, "CDF");
+  dictionary->SetValue(kLineTypeMarker, line_type_);
 
   std::string script;
   CHECK(ctemplate::ExpandTemplate(kPythonGrapherCDFPlot,
@@ -384,6 +402,7 @@ std::string Plot::PlotToSVG() const {
   std::string tmp_dir = GetTmpDirectory();
   PlotToDir(tmp_dir);
   std::string svg = ExecuteInDirectory(kSVGCommand, tmp_dir);
+  RemoveDirectory(tmp_dir);
   return svg;
 }
 
@@ -400,6 +419,7 @@ void Plot::PlotToArchiveFile(const std::string& filename) const {
   std::string tmp_dir = GetTmpDirectory();
   PlotToDir(tmp_dir);
   ExecuteInDirectory(nc::Substitute(kZipCommand, abs_filename), tmp_dir);
+  RemoveDirectory(tmp_dir);
   return;
 }
 

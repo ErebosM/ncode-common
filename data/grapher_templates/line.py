@@ -3,17 +3,18 @@ import matplotlib.pylab as plt
 import argparse
 from io import BytesIO
 
-parser = argparse.ArgumentParser(description='Plots a CDF')
+parser = argparse.ArgumentParser(description='Plots a line plot')
 parser.add_argument('--dump_svg', type=bool, default=False,
                    help='If true will not plot to screen, but dump SVG to stdout.')
 args = parser.parse_args()
 
-for filename, label in {{files_and_labels}}:
+data = {{files_and_labels}}
+for filename, label in data:
     data = np.loadtxt(filename)
     x = data[:,0]
     y = data[:,1]
     x, y = zip(*sorted(zip(x, y)))
-    plt.plot(x, y, label=label)
+    plt.plot(x, y, "{{line_type}}", label=label)
 
 ax = plt.gca()
 for lines_and_labels in {{lines_and_labels}}:
@@ -29,7 +30,9 @@ for ranges in {{ranges}}:
 plt.title('{{title}}')
 plt.xlabel('{{xlabel}}')
 plt.ylabel('{{ylabel}}')
-plt.legend()
+
+if len(data) > 1:
+    plt.legend()
 
 if args.dump_svg:
     # Save SVG in a fake file object.

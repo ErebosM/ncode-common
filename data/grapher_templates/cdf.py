@@ -11,9 +11,10 @@ args = parser.parse_args()
 def PlotCDF(x, label):
     x = np.sort(x)
     y = np.arange(len(x))/float(len(x))
-    plt.plot(x, y, label=label)
+    plt.plot(x, y, "{{line_type}}", label=label)
 
-for filename, label in {{files_and_labels}}:
+data = {{files_and_labels}}
+for filename, label in data:
     data = np.loadtxt(filename)
     PlotCDF(data, label=label)
 
@@ -25,7 +26,9 @@ for x_pos, label in {{lines_and_labels}}:
 plt.title('{{title}}')
 plt.xlabel('{{xlabel}}')
 plt.ylabel('{{ylabel}}')
-plt.legend()
+
+if len(data) > 1:
+    plt.legend()
 
 if args.dump_svg:
     # Save SVG in a fake file object.
