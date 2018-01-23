@@ -46,6 +46,13 @@ struct ColoredRange {
   double x2;
 };
 
+// Annotation with a bubble.
+struct Annotation {
+  double x;
+  double y;
+  std::string annotation;
+};
+
 // Parameters for a plot.
 struct PlotParameters {
   PlotParameters(const std::string& title) : title(title) {}
@@ -62,6 +69,9 @@ struct PlotParameters {
   // Ranges on the x axis to highlight. All ranges within the same vector will
   // share the same color.
   std::vector<std::vector<ColoredRange>> ranges;
+
+  // Annotation strings and x/y coordinates.
+  std::vector<Annotation> annotations;
 };
 
 // Parameters for a 2d line plot.

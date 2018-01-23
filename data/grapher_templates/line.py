@@ -27,6 +27,12 @@ for ranges in {{ranges}}:
     for x1, x2 in ranges:
         plt.axvspan(x1, x2, color=next_color)
 
+for a_label, a_x, a_y in {{annotations}}:
+    plt.annotate(a_label, xy=(a_x, a_y), xytext=(-20, 20),
+        textcoords='offset points', ha='right', va='bottom',
+        bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+        arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
+
 plt.title('{{title}}')
 plt.xlabel('{{xlabel}}')
 plt.ylabel('{{ylabel}}')

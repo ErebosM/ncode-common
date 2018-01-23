@@ -54,6 +54,7 @@ static constexpr char kPythonGrapherYLabelMarker[] = "ylabel";
 static constexpr char kLineTypeMarker[] = "line_type";
 static constexpr char kPythonGrapherFilesAndLabelsMarker[] = "files_and_labels";
 static constexpr char kPythonGrapherLinesAndLabelsMarker[] = "lines_and_labels";
+static constexpr char kPythonGrapherAnnotationsMarker[] = "annotations";
 static constexpr char kPythonGrapherRangesMarker[] = "ranges";
 static constexpr char kPythonGrapherStackedXSMarker[] =
     "stacked_plot_xs_filename";
@@ -277,6 +278,13 @@ static std::unique_ptr<ctemplate::TemplateDictionary> PlotCommon(
   std::string lines_and_labels_var_contents =
       StrCat("[", Join(lines_and_labels_l2, ","), "]");
 
+  std::vector<std::string> annotations;
+  for (const Annotation& annotation : plot_params.annotations) {
+    annotations.emplace_back(StrCat("(", Quote(annotation.annotation), ",",
+                                    annotation.x, ",", annotation.y, ")"));
+  }
+  std::string annotation_contents = StrCat("[", Join(annotations, ","), "]");
+
   std::vector<std::string> ranges_l2;
   for (const std::vector<ColoredRange>& ranges_with_same_color :
        plot_params.ranges) {
@@ -295,6 +303,7 @@ static std::unique_ptr<ctemplate::TemplateDictionary> PlotCommon(
                        files_and_labels_var_contents);
   dictionary->SetValue(kPythonGrapherLinesAndLabelsMarker,
                        lines_and_labels_var_contents);
+  dictionary->SetValue(kPythonGrapherAnnotationsMarker, annotation_contents);
   dictionary->SetValue(kPythonGrapherRangesMarker, ranges_var_contents);
   dictionary->SetValue(kPythonGrapherTitleMarker, plot_params.title);
   return dictionary;
