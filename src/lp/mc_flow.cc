@@ -720,8 +720,7 @@ double MinMaxProblem::Solve(
       problem.SetObjectiveCoefficient(link_utilization_var,
                                       link_weight * link_capacity);
     } else {
-      problem.SetObjectiveCoefficient(link_utilization_var,
-                                      -link_weight * link_capacity);
+      problem.SetObjectiveCoefficient(link_utilization_var, -link_weight);
     }
   }
 
