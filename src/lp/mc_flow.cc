@@ -717,9 +717,11 @@ double MinMaxProblem::Solve(
     double link_weight =
         std::chrono::duration<double, std::milli>(link->delay()).count();
     if (also_minimize_delay_) {
-      problem.SetObjectiveCoefficient(link_utilization_var, link_weight);
+      problem.SetObjectiveCoefficient(link_utilization_var,
+                                      link_weight * link_capacity);
     } else {
-      problem.SetObjectiveCoefficient(link_utilization_var, -link_weight);
+      problem.SetObjectiveCoefficient(link_utilization_var,
+                                      -link_weight * link_capacity);
     }
   }
 
