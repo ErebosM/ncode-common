@@ -328,10 +328,18 @@ bool GraphStorage::HasLink(const std::string& src,
   return false;
 }
 
-GraphStorage::GraphStorage(const GraphBuilder& graph_builder) {
+GraphStorage::GraphStorage(const GraphBuilder& graph_builder,
+                           const std::vector<std::string>& node_order)
+    : node_order_(node_order) {
+  std::set<std::string> node_ids;
   for (const auto& link_base : graph_builder.links()) {
     const std::string& src_id = link_base.src_id();
     const std::string& dst_id = link_base.dst_id();
+
+    if (!node_order_.empty()) {
+      node_ids.emplace(src_id);
+      node_ids.emplace(dst_id);
+    }
 
     auto src_index = NodeFromString(src_id);
     auto dst_index = NodeFromString(dst_id);
@@ -343,6 +351,12 @@ GraphStorage::GraphStorage(const GraphBuilder& graph_builder) {
   }
 
   PopulateAdjacencyList();
+  if (!node_order_.empty()) {
+    CHECK(node_ids.size() == node_order_.size());
+    for (const std::string& node_id : node_order_) {
+      CHECK(ContainsKey(node_ids, node_id));
+    }
+  }
 }
 
 GraphBuilder GraphStorage::ToBuilder() const {

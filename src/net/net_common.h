@@ -459,7 +459,8 @@ class AdjacencyList {
 // Stores and maintains a graph.
 class GraphStorage {
  public:
-  GraphStorage(const GraphBuilder& graph_builder);
+  GraphStorage(const GraphBuilder& graph_builder,
+               const std::vector<std::string>& node_order = {});
 
   // Returns a GraphBuilder with the topology.
   GraphBuilder ToBuilder() const;
@@ -553,6 +554,13 @@ class GraphStorage {
   // Returns true if there is at most one link between any two nodes.
   bool IsSimple() const { return simple_; }
 
+  // Returns an ordered list of node ids. Will die if no order was specified
+  // upon construction.
+  const std::vector<std::string>& NodeOrderOrDie() const {
+    CHECK(!node_order_.empty());
+    return node_order_;
+  }
+
  private:
   GraphStorage() : simple_(true) {}
 
@@ -585,6 +593,10 @@ class GraphStorage {
 
   // True if there are no multiple edges between any two nodes.
   bool simple_;
+
+  // Optional ordered list of node ids. Populated upon construction, should hold
+  // the ids of all nodes in the network.
+  std::vector<std::string> node_order_;
 
   DISALLOW_COPY_AND_ASSIGN(GraphStorage);
 };
