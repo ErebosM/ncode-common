@@ -395,11 +395,10 @@ static std::string GetPropertiesFileName(const std::string& matrix_file) {
 std::unique_ptr<DemandMatrix> DemandMatrix::LoadRepetitaFileOrDie(
     const std::string& matrix_file, const std::vector<std::string>& node_names,
     const net::GraphStorage* graph) {
-  std::string prop_file = GetPropertiesFileName(matrix_file);
-
   std::unique_ptr<DemandMatrix> demand_matrix = LoadRepetitaStringOrDie(
       nc::File::ReadFileToStringOrDie(matrix_file), node_names, graph);
 
+  std::string prop_file = GetPropertiesFileName(matrix_file);
   if (File::Exists(prop_file)) {
     File::ReadLines(prop_file, [&demand_matrix](const std::string& line) {
       std::vector<std::string> key_and_value = nc::Split(line, " ");

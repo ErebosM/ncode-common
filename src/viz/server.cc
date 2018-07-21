@@ -1,5 +1,7 @@
 #include "server.h"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <stddef.h>
 #include <string.h>
@@ -19,9 +21,12 @@
 namespace nc {
 namespace viz {
 
-static bool BlockingRawWriteToSocket(int sock, const char* buf, uint32_t len) {
-  uint32_t total = 0;
+bool BlockingWriteMessage(const OutgoingHeaderAndMessage& msg) {
+  const char* buf = msg.buffer.data();
+  size_t len = msg.buffer.size();
+  int sock = msg.socket;
 
+  uint32_t total = 0;
   while (total < len) {
     int bytes_written = write(sock, buf + total, len - total);
     if (bytes_written < 0) {
@@ -46,18 +51,18 @@ static bool BlockingRawWriteToSocket(int sock, const char* buf, uint32_t len) {
     total += bytes_written;
   }
 
+  if (msg.last_in_connection) {
+    close(sock);
+  }
+
   return true;
 }
 
-bool BlockingWriteMessage(const HeaderAndMessage& msg) {
-  const char* buffer_ptr = msg.buffer.data();
-  return BlockingRawWriteToSocket(msg.socket, buffer_ptr, msg.buffer.size());
-}
-
-TCPServer::TCPServer(uint32_t port, HeaderCallback header_callback,
+TCPServer::TCPServer(const TCPServerConfig& config,
+                     HeaderCallback header_callback,
                      IncomingMessageQueue* incoming)
-    : tcp_socket_(-1),
-      port_(port),
+    : config_(config),
+      tcp_socket_(-1),
       to_kill_(false),
       header_callback_(header_callback),
       incoming_(incoming) {}
@@ -94,7 +99,7 @@ void TCPServer::OpenSocket() {
   }
 
   address.sin_family = AF_INET;
-  address.sin_port = htons(port_);
+  address.sin_port = htons(config_.port_num);
   address.sin_addr.s_addr = INADDR_ANY;
 
   int yes = 1;
@@ -114,6 +119,11 @@ void TCPServer::OpenSocket() {
 
   // Set to non-blocking
   fcntl(tcp_socket_, F_SETFL, O_NONBLOCK);
+}
+
+static std::chrono::milliseconds TimeNow() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch());
 }
 
 void TCPServer::NewTcpConnection(int* new_socket, bool* try_again) {
@@ -136,10 +146,16 @@ void TCPServer::NewTcpConnection(int* new_socket, bool* try_again) {
   fcntl(socket, F_SETFL, O_NONBLOCK);
   *new_socket = socket;
 
+  std::uniform_int_distribution<uint64_t> dis;
+  uint64_t connection_id = dis(rnd_);
+  uint32_t remote_ip = ntohl(remote_address.sin_addr.s_addr);
+  uint16_t remote_port = ntohs(remote_address.sin_port);
+
   server_connections_.emplace(
       std::piecewise_construct, std::forward_as_tuple(socket),
-      std::forward_as_tuple(socket, remote_address, header_callback_,
-                            incoming_));
+      std::forward_as_tuple(
+          TCPConnectionInfo(connection_id, remote_ip, remote_port, TimeNow()),
+          socket, config_.max_message_size, header_callback_, incoming_));
 }
 
 void TCPServer::Loop() {
@@ -213,63 +229,79 @@ void TCPServer::Loop() {
   }
 }
 
-size_t InputChannel::ConsumeMessage(std::vector<char>::const_iterator from,
-                                    std::vector<char>::const_iterator to) {
+InputChannel::InputChannel(const TCPConnectionInfo& connection_info, int socket,
+                           uint32_t max_message_size,
+                           HeaderCallback header_callback,
+                           IncomingMessageQueue* incoming)
+    : connection_info_(connection_info),
+      incoming_messages_index_(0),
+      socket_(socket),
+      max_message_size_(max_message_size),
+      header_callback_(header_callback),
+      incoming_(incoming) {
+  incoming_messages_.resize(max_message_size * 10);
+}
+
+bool InputChannel::ConsumeMessage(std::vector<char>::const_iterator from,
+                                  std::vector<char>::const_iterator to,
+                                  size_t* bytes_consumed) {
   size_t bytes_in_buffer = std::distance(from, to);
 
   size_t header_size;
   size_t message_size;
   if (!header_callback_(from, to, &header_size, &message_size)) {
-    return 0;
+    return false;
   }
 
   size_t total_size = message_size + header_size;
+  if (total_size > max_message_size_) {
+    return false;
+  }
+
   if (bytes_in_buffer < total_size) {
     // We have the header, but not the message.
-    return 0;
+    *bytes_consumed = 0;
+    return true;
   }
 
   std::vector<char> to_offload(from, std::next(from, total_size));
-  auto header_and_message = make_unique<HeaderAndMessage>(socket_);
+  auto header_and_message = make_unique<IncomingHeaderAndMessage>(
+      connection_info_, socket_, TimeNow());
   header_and_message->buffer = std::move(to_offload);
   header_and_message->header_offset = header_size;
   incoming_->ProduceOrBlock(std::move(header_and_message));
-  return total_size;
+  *bytes_consumed = total_size;
+  return true;
 }
 
 bool InputChannel::ReadFromSocket() {
-  // Will greedily read as many bytes from the socket as possible.
   bool closed = false;
-  while (true) {
-    size_t current_size = header_and_message_.size();
-    header_and_message_.resize(current_size + kReadChunk);
-    char* header_ptr = header_and_message_.data();
-    ssize_t bytes_read = read(socket_, header_ptr + current_size, kReadChunk);
-    if (bytes_read < 0) {
-      header_and_message_.resize(current_size);
-      if (errno == EWOULDBLOCK) {
-        break;
-      }
 
-      LOG(ERROR) << "Unable to read: " << strerror(errno);
+  char* header_ptr = incoming_messages_.data();
+  size_t bytes_left = incoming_messages_.size() - incoming_messages_index_;
+  ssize_t bytes_read =
+      read(socket_, header_ptr + incoming_messages_index_, bytes_left);
+
+  if (bytes_read < 0 && errno != EWOULDBLOCK) {
+    LOG(ERROR) << "Unable to read: " << strerror(errno);
+    return false;
+  }
+
+  if (bytes_read == 0) {
+    closed = true;
+  }
+  incoming_messages_index_ += bytes_read;
+
+  size_t offset = 0;
+  size_t bytes_consumed = 0;
+  while (true) {
+    if (!ConsumeMessage(
+            std::next(incoming_messages_.begin(), offset),
+            std::next(incoming_messages_.end(), incoming_messages_index_),
+            &bytes_consumed)) {
       return false;
     }
 
-    if (bytes_read == 0) {
-      header_and_message_.resize(current_size);
-      closed = true;
-      break;
-    }
-
-    // In case there were less than kReadChunk bytes in the socket buffer.
-    header_and_message_.resize(current_size + bytes_read);
-  }
-
-  size_t offset = 0;
-  while (true) {
-    size_t bytes_consumed =
-        ConsumeMessage(std::next(header_and_message_.begin(), offset),
-                       header_and_message_.end());
     if (bytes_consumed == 0) {
       break;
     }
@@ -279,11 +311,9 @@ bool InputChannel::ReadFromSocket() {
 
   // Need to copy over the remaining bytes until the end of the buffer for the
   // next iteration.
-  size_t leftover = header_and_message_.size() - offset;
-  char* header_ptr = header_and_message_.data();
+  size_t leftover = incoming_messages_index_ - offset;
   memmove(header_ptr, header_ptr + offset, leftover);
-  header_and_message_.resize(leftover);
-  return true;
+  return !closed;
 }
 
 static void ResolveHostName(const std::string& hostname, in_addr* addr) {

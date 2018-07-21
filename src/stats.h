@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "common.h"
+#include "substitute.h"
 
 namespace nc {
 
@@ -154,6 +155,8 @@ class DiscreteDistribution {
     counts_[value] += count;
   }
 
+  void Add(T value) { Add(value, 1); }
+
   std::map<T, double> Probabilities() const {
     std::map<T, double> out;
 
@@ -182,9 +185,13 @@ class DiscreteDistribution {
       }
     }
 
-    LOG(FATAL) << "Should not happen";
+    LOG(FATAL) << "No values in distribution";
     return T();
   }
+
+  T Max() const { return counts_.rbegin()->first; }
+
+  T Min() const { return counts_.begin()->first; }
 
   // Returns the percentiles of this distribution.
   std::vector<T> Percentiles(size_t percentile_count = 100) const {
@@ -195,6 +202,16 @@ class DiscreteDistribution {
     }
 
     return out;
+  }
+
+  // Returns a string that describes this distribution.
+  std::string ToString(std::function<std::string(T)> fmt = [](T value) {
+    return std::to_string(value);
+  }) const {
+    std::vector<T> percentiles = Percentiles();
+    return Substitute("[min: $0, med: $1, 90p: $2, max: $3]",
+                      fmt(percentiles[0]), fmt(percentiles[50]),
+                      fmt(percentiles[90]), fmt(percentiles[100]));
   }
 
   const SummaryStats& summary_stats() const { return summary_stats_; }

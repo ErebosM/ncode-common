@@ -14,6 +14,7 @@
 #include "../common.h"
 #include "../logging.h"
 #include "../perfect_hash.h"
+#include "../stats.h"
 
 namespace nc {
 namespace net {
@@ -352,15 +353,20 @@ struct GraphStats {
   size_t unidirectional_links;
   size_t multiple_links;
 
-  // The following vectors have 101 values each.
-  std::vector<Bandwidth> link_capacity_percentiles;
-  std::vector<Delay> link_delay_percentiles;
-  std::vector<size_t> node_out_degree_percentiles;
-  std::vector<size_t> node_in_degree_percentiles;
+  DiscreteDistribution<uint64_t> link_capacities_bps;
+  DiscreteDistribution<uint64_t> link_delays_micros;
+  DiscreteDistribution<uint64_t> node_out_degrees;
+  DiscreteDistribution<uint64_t> node_in_degrees;
 
-  // Percentiles of the delays of all shortest paths in the network. The max is
-  // the diameter of the network.
-  std::vector<Delay> sp_delay_percentiles;
+  // The delays of all shortest paths in the network. The max is the diameter of
+  // the network.
+  DiscreteDistribution<uint64_t> sp_delays_micros;
+
+  // Hop counts of all shortest paths in the network.
+  DiscreteDistribution<uint64_t> sp_hops;
+
+  // Returns true if the graph is partitioned.
+  bool isPartitioned();
 
   std::string ToString();
 };

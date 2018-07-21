@@ -8,6 +8,7 @@
 #include <map>
 #include <thread>
 #include <vector>
+#include <random>
 
 #include "../common.h"
 #include "../ptr_queue.h"
@@ -29,13 +30,61 @@ using HeaderCallback =
                        std::vector<char>::const_iterator to,
                        size_t* header_size, size_t* message_size)>;
 
-// The main datum that the server produces/consumes.
-struct HeaderAndMessage {
-  HeaderAndMessage(int socket)
-      : socket(socket), last_in_connection(false), header_offset(0) {}
+// A connection to the server.
+struct TCPConnectionInfo {
+  TCPConnectionInfo(uint64_t connection_id, uint32_t remote_ip,
+                    uint16_t remote_port,
+                    std::chrono::milliseconds first_byte_seen)
+      : connection_id(connection_id),
+        remote_ip(remote_ip),
+        remote_port(remote_port),
+        first_byte_seen(first_byte_seen) {}
 
-  // Connection this message should be sent to / was received on. May or may not
-  // be valid for incoming messages. Can be used to identify connections.
+  // Random connection identifier.
+  uint64_t connection_id;
+
+  // Remote IP address (in network format)
+  uint32_t remote_ip;
+
+  // Remote port.
+  uint16_t remote_port;
+
+  // When the connection started.
+  std::chrono::milliseconds first_byte_seen;
+};
+
+// The main datum that the server produces.
+struct IncomingHeaderAndMessage {
+  IncomingHeaderAndMessage(const TCPConnectionInfo& tcp_connection_info,
+                           int socket, std::chrono::milliseconds time_rx)
+      : tcp_connection_info(tcp_connection_info),
+        socket(socket),
+        header_offset(0),
+        time_rx(time_rx) {}
+
+  // The connection.
+  const TCPConnectionInfo& tcp_connection_info;
+
+  // Connection this message was received on. Can be used to identify
+  // active connections, will not be unique among all connections.
+  int socket;
+
+  // Header+message are stored here.
+  std::vector<char> buffer;
+
+  // What the offset of the header is in 'buffer'.
+  size_t header_offset;
+
+  // Timestamp the message was received.
+  std::chrono::milliseconds time_rx;
+};
+
+// The main datum that the server consumes.
+struct OutgoingHeaderAndMessage {
+  OutgoingHeaderAndMessage(int socket)
+      : socket(socket), last_in_connection(false) {}
+
+  // Connection this message should be sent to.
   int socket;
 
   // If this is true the server will terminate the connection after sending this
@@ -44,39 +93,41 @@ struct HeaderAndMessage {
 
   // Header+message are stored here.
   std::vector<char> buffer;
-
-  // What the offset of the header is in 'buffer'.
-  size_t header_offset;
 };
 
-// Queue for incoming messages. There will only be one queue for the server.
-using IncomingMessageQueue = PtrQueue<HeaderAndMessage, 1024>;
+// Queue for incoming messages. There will only be one incoming queue for the
+// server.
+using IncomingMessageQueue = PtrQueue<IncomingHeaderAndMessage, 1024>;
 
 class InputChannel {
  public:
-  InputChannel(int socket, sockaddr_in address, HeaderCallback header_callback,
-               IncomingMessageQueue* incoming)
-      : socket_(socket),
-        address_(address),
-        header_callback_(header_callback),
-        incoming_(incoming) {}
+  InputChannel(const TCPConnectionInfo& connection_info, int socket,
+               uint32_t max_message_size, HeaderCallback header_callback,
+               IncomingMessageQueue* incoming);
 
-  // Consumes a message between two iterators if possible.
-  size_t ConsumeMessage(std::vector<char>::const_iterator from,
-                        std::vector<char>::const_iterator to);
+  // Consumes a message between two iterators if possible. Returns false on
+  // failure.
+  bool ConsumeMessage(std::vector<char>::const_iterator from,
+                      std::vector<char>::const_iterator to,
+                      size_t* bytes_consumed);
 
   // Reads as many messages as possible from the socket.
   bool ReadFromSocket();
 
  private:
+  const TCPConnectionInfo connection_info_;
+
   // Stores the incoming message.
-  std::vector<char> header_and_message_;
+  std::vector<char> incoming_messages_;
+
+  // Index into the array above.
+  size_t incoming_messages_index_;
 
   // The socket.
   int socket_;
 
-  // Address of the remote side.
-  sockaddr_in address_;
+  // Max size for a single message.
+  uint32_t max_message_size_;
 
   // Partially parses the header.
   HeaderCallback header_callback_;
@@ -91,11 +142,19 @@ class InputChannel {
 int Connect(const std::string& destination_address, uint32_t port);
 
 // Writes a message to the socket within msg.
-bool BlockingWriteMessage(const HeaderAndMessage& msg);
+bool BlockingWriteMessage(const OutgoingHeaderAndMessage& msg);
+
+struct TCPServerConfig {
+  // Port to listen on.
+  uint32_t port_num = 8080;
+
+  // Maximum size an incoming message is allowed to be (in bytes).
+  uint32_t max_message_size = 1 << 10;
+};
 
 class TCPServer {
  public:
-  TCPServer(uint32_t port, HeaderCallback header_callback,
+  TCPServer(const TCPServerConfig& config, HeaderCallback header_callback,
             IncomingMessageQueue* incoming_queue);
 
   virtual ~TCPServer() { Stop(); }
@@ -121,14 +180,14 @@ class TCPServer {
   // Runs the main server loop. Will block.
   void Loop();
 
+  // Configuration for the server.
+  const TCPServerConfig config_;
+
   // Currently active connections.
   std::map<int, InputChannel> server_connections_;
 
   // The socket the server listens on.
   int tcp_socket_;
-
-  // The port the server should listen to.
-  const uint32_t port_;
 
   // Set to true when the server needs to exit.
   std::atomic<bool> to_kill_;
@@ -147,6 +206,9 @@ class TCPServer {
 
   // Protected sockets_to_close_.
   std::mutex mu_;
+
+  // Generates connection IDs.
+  std::mt19937 rnd_;
 
   DISALLOW_COPY_AND_ASSIGN(TCPServer);
 };
