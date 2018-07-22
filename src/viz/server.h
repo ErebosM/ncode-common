@@ -63,7 +63,7 @@ struct IncomingHeaderAndMessage {
         time_rx(time_rx) {}
 
   // The connection.
-  const TCPConnectionInfo& tcp_connection_info;
+  const TCPConnectionInfo tcp_connection_info;
 
   // Connection this message was received on. Can be used to identify
   // active connections, will not be unique among all connections.

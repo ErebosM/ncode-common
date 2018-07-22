@@ -250,7 +250,8 @@ bool InputChannel::ConsumeMessage(std::vector<char>::const_iterator from,
   size_t header_size;
   size_t message_size;
   if (!header_callback_(from, to, &header_size, &message_size)) {
-    return false;
+    *bytes_consumed = 0;
+    return true;
   }
 
   size_t total_size = message_size + header_size;
@@ -295,9 +296,13 @@ bool InputChannel::ReadFromSocket() {
   size_t offset = 0;
   size_t bytes_consumed = 0;
   while (true) {
+    if (offset == incoming_messages_index_) {
+      break;
+    }
+
     if (!ConsumeMessage(
             std::next(incoming_messages_.begin(), offset),
-            std::next(incoming_messages_.end(), incoming_messages_index_),
+            std::next(incoming_messages_.begin(), incoming_messages_index_),
             &bytes_consumed)) {
       return false;
     }
@@ -313,6 +318,7 @@ bool InputChannel::ReadFromSocket() {
   // next iteration.
   size_t leftover = incoming_messages_index_ - offset;
   memmove(header_ptr, header_ptr + offset, leftover);
+  incoming_messages_index_ = leftover;
   return !closed;
 }
 

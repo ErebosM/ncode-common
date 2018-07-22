@@ -32,7 +32,7 @@ static bool ParseConstantSizeHeader(std::vector<char>::const_iterator from,
 
 class Fixture : public ::testing::Test {
  public:
-  Fixture() : server_(TCPServerConfig(), ParseConstantSizeHeader, &incoming_) {}
+  Fixture() : server_(config_, ParseConstantSizeHeader, &incoming_) {}
 
   std::unique_ptr<OutgoingHeaderAndMessage> GetJunkMessage(uint32_t size,
                                                            int socket) {
@@ -44,6 +44,7 @@ class Fixture : public ::testing::Test {
     return out;
   }
 
+  TCPServerConfig config_;
   IncomingMessageQueue incoming_;
   TCPServer server_;
 };
@@ -71,13 +72,29 @@ TEST_F(Fixture, SimpleMessage) {
   ASSERT_EQ(to_send->buffer, contents[0]->buffer);
 }
 
+TEST_F(Fixture, MessageTooBig) {
+  server_.Start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+  int socket = Connect("127.0.0.1", 8080);
+  auto to_send = GetJunkMessage(config_.max_message_size + 1, socket);
+  BlockingWriteMessage(*to_send);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  server_.Stop();
+
+  std::vector<std::unique_ptr<IncomingHeaderAndMessage>> contents =
+      incoming_.Drain();
+  ASSERT_EQ(0ul, contents.size());
+}
+
 TEST_F(Fixture, LotsOfMessages) {
   using namespace std::chrono;
   std::mt19937 rnd(1);
 
   // 1M messages in and about 500MB data.
   size_t msg_count = 1 << 20;
-  std::uniform_int_distribution<size_t> dist(10, 1000);
+  std::uniform_int_distribution<size_t> dist(10, config_.max_message_size - 4);
 
   server_.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -101,6 +118,9 @@ TEST_F(Fixture, LotsOfMessages) {
     for (size_t i = 0; i < msg_count; ++i) {
       std::unique_ptr<IncomingHeaderAndMessage> msg =
           incoming_.ConsumeOrBlock();
+      ASSERT_NE(0ul, msg->tcp_connection_info.connection_id);
+      ASSERT_NE(0ul, msg->tcp_connection_info.remote_ip);
+      ASSERT_NE(0ul, msg->tcp_connection_info.remote_port);
       received.emplace_back(std::move(msg));
     }
   });
