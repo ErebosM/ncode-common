@@ -81,15 +81,10 @@ struct IncomingHeaderAndMessage {
 
 // The main datum that the server consumes.
 struct OutgoingHeaderAndMessage {
-  OutgoingHeaderAndMessage(int socket)
-      : socket(socket), last_in_connection(false) {}
+  OutgoingHeaderAndMessage(int socket) : socket(socket) {}
 
   // Connection this message should be sent to.
   int socket;
-
-  // If this is true the server will terminate the connection after sending this
-  // message.
-  bool last_in_connection;
 
   // Header+message are stored here.
   std::vector<char> buffer;
@@ -113,6 +108,8 @@ class InputChannel {
 
   // Reads as many messages as possible from the socket.
   bool ReadFromSocket();
+
+  uint64_t GetConnectionId() const { return connection_info_.connection_id; }
 
  private:
   const TCPConnectionInfo connection_info_;
@@ -145,11 +142,14 @@ int Connect(const std::string& destination_address, uint32_t port);
 bool BlockingWriteMessage(const OutgoingHeaderAndMessage& msg);
 
 struct TCPServerConfig {
+  constexpr TCPServerConfig(uint32_t port_num, uint32_t max_message_size)
+      : port_num(port_num), max_message_size(max_message_size) {}
+
   // Port to listen on.
-  uint32_t port_num = 8080;
+  uint32_t port_num;
 
   // Maximum size an incoming message is allowed to be (in bytes).
-  uint32_t max_message_size = 1 << 10;
+  uint32_t max_message_size;
 };
 
 class TCPServer {
@@ -168,6 +168,10 @@ class TCPServer {
   // Waits for the server to terminate.
   void Join();
 
+  // Closes the connection with the given identifier. If the connection does not
+  // exist does nothing.
+  void CloseConnection(uint64_t connection_id);
+
  private:
   // Opens the socket for listening.
   void OpenSocket();
@@ -179,6 +183,10 @@ class TCPServer {
 
   // Runs the main server loop. Will block.
   void Loop();
+
+  // Finds the connection with the given identifier and closes it. Populates the
+  // connection socket on success.
+  bool FindAndRemoveConnection(uint64_t connection_id, int* socket);
 
   // Configuration for the server.
   const TCPServerConfig config_;
@@ -201,10 +209,10 @@ class TCPServer {
   // Queues for messages leaving out/coming in.
   IncomingMessageQueue* incoming_;
 
-  // Sockets to remove from the set of listening sockets.
-  std::vector<int> sockets_to_close_;
+  // Connections to close.
+  std::vector<uint64_t> connections_to_close_;
 
-  // Protected sockets_to_close_.
+  // Protects sockets_to_close_.
   std::mutex mu_;
 
   // Generates connection IDs.

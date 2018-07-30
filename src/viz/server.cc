@@ -44,15 +44,12 @@ bool BlockingWriteMessage(const OutgoingHeaderAndMessage& msg) {
 
       int select_return = select(sock + 1, nullptr, &write_fds, NULL, &tv);
       if (select_return < 0) {
-        LOG(FATAL) << "Unable to select: " << strerror(errno);
+        LOG(ERROR) << "Unable to select: " << strerror(errno);
+        return false;
       }
     }
 
     total += bytes_written;
-  }
-
-  if (msg.last_in_connection) {
-    close(sock);
   }
 
   return true;
@@ -158,6 +155,26 @@ void TCPServer::NewTcpConnection(int* new_socket, bool* try_again) {
           socket, config_.max_message_size, header_callback_, incoming_));
 }
 
+void TCPServer::CloseConnection(uint64_t connection_id) {
+  std::lock_guard<std::mutex> lock(mu_);
+  connections_to_close_.emplace_back(connection_id);
+}
+
+bool TCPServer::FindAndRemoveConnection(uint64_t connection_id,
+                                        int* connection_socket) {
+  for (auto it = server_connections_.begin(); ++it;
+       it != server_connections_.end()) {
+    int socket = it->first;
+    if (it->second.GetConnectionId() == connection_id) {
+      server_connections_.erase(it);
+      *connection_socket = socket;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void TCPServer::Loop() {
   int last_fd = tcp_socket_;
   fd_set master;
@@ -181,14 +198,16 @@ void TCPServer::Loop() {
 
     {
       std::lock_guard<std::mutex> lock(mu_);
-      for (int socket_to_close : sockets_to_close_) {
-        server_connections_.erase(socket_to_close);
-        close(socket_to_close);
-        FD_CLR(socket_to_close, &master);
-        FD_CLR(socket_to_close, &read_fds);
+      for (uint64_t connection_to_close : connections_to_close_) {
+        int socket_to_close;
+        if (FindAndRemoveConnection(connection_to_close, &socket_to_close)) {
+          close(socket_to_close);
+          FD_CLR(socket_to_close, &master);
+          FD_CLR(socket_to_close, &read_fds);
+        }
       }
 
-      sockets_to_close_.clear();
+      connections_to_close_.clear();
     }
 
     if (select_return == 0) {

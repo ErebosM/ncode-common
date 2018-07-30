@@ -15,6 +15,8 @@ namespace nc {
 namespace viz {
 namespace {
 
+static constexpr TCPServerConfig kConfig = {8080, 1 << 10};
+
 // A dummy function to parse a single uint32_t integer header with the message
 // size.
 static bool ParseConstantSizeHeader(std::vector<char>::const_iterator from,
@@ -32,7 +34,7 @@ static bool ParseConstantSizeHeader(std::vector<char>::const_iterator from,
 
 class Fixture : public ::testing::Test {
  public:
-  Fixture() : server_(config_, ParseConstantSizeHeader, &incoming_) {}
+  Fixture() : server_(kConfig, ParseConstantSizeHeader, &incoming_) {}
 
   std::unique_ptr<OutgoingHeaderAndMessage> GetJunkMessage(uint32_t size,
                                                            int socket) {
@@ -44,7 +46,6 @@ class Fixture : public ::testing::Test {
     return out;
   }
 
-  TCPServerConfig config_;
   IncomingMessageQueue incoming_;
   TCPServer server_;
 };
@@ -77,7 +78,7 @@ TEST_F(Fixture, MessageTooBig) {
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
   int socket = Connect("127.0.0.1", 8080);
-  auto to_send = GetJunkMessage(config_.max_message_size + 1, socket);
+  auto to_send = GetJunkMessage(kConfig.max_message_size + 1, socket);
   BlockingWriteMessage(*to_send);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -94,7 +95,7 @@ TEST_F(Fixture, LotsOfMessages) {
 
   // 1M messages in and about 500MB data.
   size_t msg_count = 1 << 20;
-  std::uniform_int_distribution<size_t> dist(10, config_.max_message_size - 4);
+  std::uniform_int_distribution<size_t> dist(10, kConfig.max_message_size - 4);
 
   server_.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
