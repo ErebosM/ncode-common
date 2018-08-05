@@ -73,6 +73,29 @@ TEST_F(Fixture, SimpleMessage) {
   ASSERT_EQ(to_send->buffer, contents[0]->buffer);
 }
 
+TEST_F(Fixture, CloseConnection) {
+  server_.Start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+  int socket = Connect("127.0.0.1", 8080);
+  auto to_send = GetJunkMessage(100, socket);
+  ASSERT_TRUE(BlockingWriteMessage(*to_send));
+
+  bool timed_out = false;
+  std::unique_ptr<IncomingHeaderAndMessage> incoming_message =
+      incoming_.ConsumeOrBlockWithTimeout(std::chrono::milliseconds(1000),
+                                          &timed_out);
+  ASSERT_FALSE(timed_out);
+  uint64_t connection_id = incoming_message->tcp_connection_info.connection_id;
+  server_.CloseConnection(connection_id);
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  BlockingWriteMessage(*to_send);
+
+  std::vector<std::unique_ptr<IncomingHeaderAndMessage>> contents =
+      incoming_.Drain();
+  ASSERT_EQ(0ul, contents.size());
+}
+
 TEST_F(Fixture, MessageTooBig) {
   server_.Start();
   std::this_thread::sleep_for(std::chrono::milliseconds(500));

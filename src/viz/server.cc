@@ -162,8 +162,8 @@ void TCPServer::CloseConnection(uint64_t connection_id) {
 
 bool TCPServer::FindAndRemoveConnection(uint64_t connection_id,
                                         int* connection_socket) {
-  for (auto it = server_connections_.begin(); ++it;
-       it != server_connections_.end()) {
+  for (auto it = server_connections_.begin(); it != server_connections_.end();
+       ++it) {
     int socket = it->first;
     if (it->second.GetConnectionId() == connection_id) {
       server_connections_.erase(it);
@@ -201,6 +201,9 @@ void TCPServer::Loop() {
       for (uint64_t connection_to_close : connections_to_close_) {
         int socket_to_close;
         if (FindAndRemoveConnection(connection_to_close, &socket_to_close)) {
+          struct linger lo = { 1, 0 };
+          setsockopt(socket_to_close, SOL_SOCKET, SO_LINGER, &lo, sizeof(lo));
+
           close(socket_to_close);
           FD_CLR(socket_to_close, &master);
           FD_CLR(socket_to_close, &read_fds);
