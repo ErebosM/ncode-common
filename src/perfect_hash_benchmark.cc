@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <vector>
