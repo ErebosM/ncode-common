@@ -47,9 +47,9 @@ bool BlockingWriteMessage(const OutgoingHeaderAndMessage& msg) {
         LOG(ERROR) << "Unable to select: " << strerror(errno);
         return false;
       }
+    } else {
+      total += bytes_written;
     }
-
-    total += bytes_written;
   }
 
   return true;
@@ -201,7 +201,7 @@ void TCPServer::Loop() {
       for (uint64_t connection_to_close : connections_to_close_) {
         int socket_to_close;
         if (FindAndRemoveConnection(connection_to_close, &socket_to_close)) {
-          struct linger lo = { 1, 0 };
+          struct linger lo = {1, 0};
           setsockopt(socket_to_close, SOL_SOCKET, SO_LINGER, &lo, sizeof(lo));
 
           close(socket_to_close);

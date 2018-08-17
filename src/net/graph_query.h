@@ -56,7 +56,7 @@ class PathExpression {
 
   friend bool operator==(const PathExpression& lhs, const PathExpression& rhs) {
     return lhs.src_ == rhs.src_ && lhs.dst_ == rhs.dst_ &&
-           lhs.constraints_ == rhs.constraints_ && lhs.graph_ == lhs.graph_;
+           lhs.constraints_ == rhs.constraints_ && lhs.graph_ == rhs.graph_;
   }
 
  private:

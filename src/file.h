@@ -34,6 +34,7 @@
 #ifndef NCODE_FILE_H__
 #define NCODE_FILE_H__
 
+#include <functional>
 #include <iostream>
 
 #include "common.h"

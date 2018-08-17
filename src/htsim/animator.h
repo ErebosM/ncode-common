@@ -4,6 +4,7 @@
 #define NCODE_HTSIM_ANIMATOR_H
 
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
