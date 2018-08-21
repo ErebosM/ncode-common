@@ -108,6 +108,7 @@ class LogFinisher {
 
 #define CHECK(EXPRESSION) \
   LOG_IF(FATAL, !(EXPRESSION)) << "CHECK failed: " #EXPRESSION ": "
+#define CHECK_OK(A) CHECK(::nc::internal::IsOk(A))
 #define CHECK_EQ(A, B) CHECK((A) == (B))
 #define CHECK_NE(A, B) CHECK((A) != (B))
 #define CHECK_LT(A, B) CHECK((A) < (B))
@@ -124,6 +125,15 @@ T* CheckNotNull(const char* /* file */, int /* line */, const char* name,
   }
   return val;
 }
+
+template <typename T>
+bool IsOk(T status) {
+  return status.ok();
+}
+template <>
+inline bool IsOk(bool status) {
+  return status;
+}
 }
 // namespace internal
 
@@ -137,6 +147,7 @@ T* CheckNotNull(const char* /* file */, int /* line */, const char* name,
 
 #define DCHECK(EXPRESSION) \
   while (false) CHECK(EXPRESSION)
+#define DCHECK_OK(E) DCHECK(::nc::internal::IsOk(E))
 #define DCHECK_EQ(A, B) DCHECK((A) == (B))
 #define DCHECK_NE(A, B) DCHECK((A) != (B))
 #define DCHECK_LT(A, B) DCHECK((A) < (B))
