@@ -51,6 +51,11 @@ class LRUCache {
   // has the same key (if any).
   template <class... Args>
   V& InsertNew(const K& key, Args&&... args) {
+    return InsertNew(key, make_unique<V>(args...));
+  }
+
+  // Inserts a new entry and evicts the entry that has the same key (if any).
+  V& InsertNew(const K& key, std::unique_ptr<V> value) {
     ObjectAndListIterator& object_and_list_it = cache_map_[key];
     if (object_and_list_it.object) {
       // Will evict the current entry.
@@ -70,7 +75,7 @@ class LRUCache {
       object_and_list_it.iterator = keys_.begin();
     }
 
-    object_and_list_it.object = make_unique<V>(args...);
+    object_and_list_it.object = std::move(value);
     return *object_and_list_it.object;
   }
 

@@ -97,11 +97,18 @@ bool File::FileOrDirectory(const std::string& name, bool* directory) {
   return true;
 }
 
-uint64_t File::FileSizeOrDie(const std::string& name) {
+StatusOr<uint64_t> File::FileSize(const std::string& name) {
   struct stat64 statbuf;
-  CHECK(stat64(name.c_str(), &statbuf) == 0) << "Bad fstat: "
-                                             << strerror(errno);
-  CHECK(!S_ISDIR(statbuf.st_mode)) << "File is a directory: " << name;
+  if (stat64(name.c_str(), &statbuf) != 0) {
+    return Status(error::INVALID_ARGUMENT,
+                  StrCat("Bad fstat, ", strerror(errno)));
+  }
+
+  if (S_ISDIR(statbuf.st_mode)) {
+    return Status(error::INVALID_ARGUMENT,
+                  StrCat("File is a directory, ", name));
+  }
+
   return statbuf.st_size;
 }
 
@@ -128,44 +135,38 @@ std::string File::ReadFileToStringOrDie(const std::string& name) {
   return output;
 }
 
-bool File::WriteStringToFile(const std::string& contents,
-                             const std::string& name) {
-  FILE* file = fopen(name.c_str(), "wb");
-  if (file == NULL) {
-    LOG(ERROR) << "fopen(" << name << ", \"wb\"): " << strerror(errno);
-    return false;
-  }
-
-  if (fwrite(contents.data(), 1, contents.size(), file) != contents.size()) {
-    LOG(ERROR) << "fwrite(" << name << "): " << strerror(errno);
-    return false;
-  }
-
-  if (fclose(file) != 0) {
-    return false;
-  }
-  return true;
-}
-
-void File::WriteStringToFileOrDie(const std::string& contents,
-                                  const std::string& name, bool append,
-                                  bool create_parents) {
-  if (create_parents) {
-    std::string dir_name = ExtractDirectoryName(name);
-    RecursivelyCreateDir(dir_name, 0777);
+Status File::WriteToFile(const void* contents, size_t num_bytes,
+                         const std::string& filename,
+                         FileWriteOptions options) {
+  if (options.create_parents) {
+    std::string dir_name = ExtractDirectoryName(filename);
+    if (!dir_name.empty()) {
+      RecursivelyCreateDir(dir_name, 0777);
+    }
   }
 
   const char* mode = "wb";
-  if (append) {
+  if (options.append) {
     mode = "ab";
   }
 
-  FILE* file = fopen(name.c_str(), mode);
-  CHECK(file != NULL) << "fopen(" << name << ", \"" << mode
-                      << "\"): " << strerror(errno);
-  CHECK_EQ(fwrite(contents.data(), 1, contents.size(), file), contents.size())
-      << "fwrite(" << name << "): " << strerror(errno);
-  CHECK(fclose(file) == 0) << "fclose(" << name << "): " << strerror(errno);
+  FILE* file = fopen(filename.c_str(), mode);
+  if (file == NULL) {
+    return Status(error::INVALID_ARGUMENT,
+                  StrCat("Unable to fopen(", filename, ", \"", mode, "\"), ",
+                         strerror(errno)));
+  }
+
+  if (fwrite(contents, 1, num_bytes, file) != num_bytes) {
+    return Status(error::INTERNAL, StrCat("Unable to fwrite to ", filename,
+                                          ", ", strerror(errno)));
+  }
+
+  if (fclose(file) != 0) {
+    return Status(error::INTERNAL, StrCat("Unable to fclose ", filename));
+  }
+
+  return Status::OK;
 }
 
 bool File::CreateDir(const std::string& name, int mode) {
@@ -173,9 +174,13 @@ bool File::CreateDir(const std::string& name, int mode) {
 }
 
 bool File::RecursivelyCreateDir(const std::string& path, int mode) {
-  if (CreateDir(path, mode)) return true;
+  if (CreateDir(path, mode)) {
+    return true;
+  }
 
-  if (Exists(path)) return false;
+  if (Exists(path)) {
+    return false;
+  }
 
   // Try creating the parent.
   std::string::size_type slashpos = path.find_last_of('/');

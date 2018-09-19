@@ -12,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <random>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -164,6 +165,13 @@ Iter SelectRandomly(Iter start, Iter end, RandomGenerator* g) {
   std::advance(start, dis(*g));
   return start;
 }
+
+// Generates a random uint64_t identifier that has not been taken yet. Will try
+// to generate small values first. Will use the provided random number
+// generator, or use a new one with seed of 1 if no random number generator is
+// provided.
+uint64_t GetRandomId(std::function<bool(uint64_t)> id_taken,
+                     std::mt19937* rnd = nullptr);
 
 uint32_t ghtonl(uint32_t x);
 

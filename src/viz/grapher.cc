@@ -514,7 +514,9 @@ void NpyArray::ToDisk(const std::string& output_dir, bool append) const {
   for (const std::vector<StringOrNumeric>& row : data_) {
     StrAppend(&rows, RowToString(row), "\n");
   }
-  File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"), append);
+  FileWriteOptions options;
+  options.append = append;
+  File::WriteStringToFileOrDie(rows, StrCat(output_dir, "/data"), options);
 
   std::string script_file = StrCat(output_dir, "/parse.py");
   if (append && File::Exists(script_file)) {

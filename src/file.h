@@ -38,10 +38,16 @@
 #include <iostream>
 
 #include "common.h"
+#include "statusor.h"
 
 namespace nc {
 
 const int DEFAULT_FILE_MODE = 0777;
+
+struct FileWriteOptions {
+  bool append = false;
+  bool create_parents = true;
+};
 
 // Protocol buffer code only uses a couple static methods of File, and only
 // in tests.
@@ -63,7 +69,7 @@ class File {
   static bool FileOrDirectory(const std::string& name, bool* directory);
 
   // Returns the size of the given file in bytes.
-  static uint64_t FileSizeOrDie(const std::string& name);
+  static StatusOr<uint64_t> FileSize(const std::string& name);
 
   // Moves a file or crashes.
   static void MoveOrDie(const std::string& src, const std::string& dst);
@@ -75,15 +81,23 @@ class File {
   // Same as above, but crash on failure.
   static std::string ReadFileToStringOrDie(const std::string& name);
 
-  // Create a file and write a string to it.
-  static bool WriteStringToFile(const std::string& contents,
-                                const std::string& name);
+  // Create a file (if one does not exist) and write bytes to it.
+  static Status WriteToFile(const void* contents, size_t num_bytes,
+                            const std::string& filename,
+                            FileWriteOptions options = {});
+
+  static Status WriteStringToFile(const std::string& contents,
+                                  const std::string& name,
+                                  FileWriteOptions options = {}) {
+    return WriteToFile(contents.c_str(), contents.size(), name, options);
+  }
 
   // Same as above, but crash on failure.
   static void WriteStringToFileOrDie(const std::string& contents,
                                      const std::string& name,
-                                     bool append = false,
-                                     bool create_parents = true);
+                                     FileWriteOptions options = {}) {
+    CHECK_OK(WriteToFile(contents.c_str(), contents.size(), name, options));
+  }
 
   // Create a directory.
   static bool CreateDir(const std::string& name, int mode);
@@ -116,8 +130,8 @@ class File {
   static bool ReadLines(const std::string& name,
                         std::function<void(const std::string& line)> callback);
 
-  static bool SetContents(const std::string& name, const std::string& contents,
-                          bool /*is_default*/) {
+  static Status SetContents(const std::string& name,
+                            const std::string& contents, bool /*is_default*/) {
     return WriteStringToFile(contents, name);
   }
 

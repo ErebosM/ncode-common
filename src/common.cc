@@ -4,6 +4,7 @@
 #include <string>
 #include <iomanip>
 #include <iostream>
+#include <random>
 
 namespace nc {
 
@@ -139,6 +140,38 @@ std::string ToStringMaxDecimals(double value, int decimals) {
     s.erase(s.size() - decimals + 1);
   }
   return s;
+}
+
+static uint64_t GetRandomIdHelper(std::function<bool(uint64_t)> id_taken,
+                                  std::mt19937* rnd) {
+  for (size_t i = 5; i <= 32; ++i) {
+    uint64_t max = (1 << i) - 1;
+    std::uniform_int_distribution<uint64_t> distribution(0, max);
+
+    uint64_t next_id = distribution(*rnd);
+    if (!id_taken(next_id)) {
+      return next_id;
+    }
+  }
+
+  std::uniform_int_distribution<uint64_t> distribution;
+  while (true) {
+    uint64_t next_id = distribution(*rnd);
+    if (id_taken(next_id)) {
+      continue;
+    }
+
+    return next_id;
+  }
+}
+
+uint64_t GetRandomId(std::function<bool(uint64_t)> id_taken,
+                     std::mt19937* rnd) {
+  if (rnd != nullptr) {
+    return GetRandomIdHelper(id_taken, rnd);
+  }
+  std::mt19937 new_rnd(1);
+  return GetRandomIdHelper(id_taken, &new_rnd);
 }
 
 }  // namespace nc

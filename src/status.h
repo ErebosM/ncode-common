@@ -71,5 +71,17 @@ class Status {
 // Prints a human-readable representation of 'x' to 'os'.
 std::ostream& operator<<(std::ostream& os, const Status& x);
 
+// Run a command that returns a Status.  If the called code returns an
+// error status, return that status up out of this method too.
+//
+// Example:
+//   RETURN_IF_ERROR(DoThings(4));
+#define RETURN_IF_ERROR(expr)                                                \
+  do {                                                                       \
+    /* Using _status below to avoid capture problems if expr is "status". */ \
+    const ::nc::Status _status = (expr);                                     \
+    if (!_status.ok()) return _status;                                       \
+  } while (0)
+
 }  // namespace nc
 #endif

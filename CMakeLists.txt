@@ -117,8 +117,8 @@ configure_file(
 include_directories(${OPTIMIZER_INCLUDE_DIRS} ${PROJECT_BINARY_DIR})
 
 # Common functionality
-set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h src/circular_array.h src/thread_runner.h src/status.h src/statusor.h)
-add_library(ncode_common OBJECT src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc src/status.cc src/statusor.cc ${NCODE_COMMON_HEADER_FILES})
+set(NCODE_COMMON_HEADER_FILES src/common.h src/substitute.h src/logging.h src/file.h src/stringpiece.h src/strutil.h src/map_util.h src/stl_util.h src/event_queue.h src/free_list.h src/packer.h src/ptr_queue.h src/lru_cache.h src/perfect_hash.h src/alphanum.h src/md5.h src/stats.h src/circular_array.h src/thread_runner.h src/status.h src/statusor.h src/statusor_internals.h src/port.h src/bloom.h)
+add_library(ncode_common OBJECT src/common.cc src/substitute.cc src/logging.cc src/file.cc src/stringpiece.cc src/strutil.cc src/event_queue.cc src/packer.cc src/md5.cc src/stats.cc src/status.cc src/statusor.cc src/bloom.cc ${NCODE_COMMON_HEADER_FILES})
 
 # Graph algorithms and pcap interface
 set(NET_HEADER_FILES src/net/net_common.h src/net/net_gen.h src/net/pcap.h src/net/algorithm.h src/net/trie.h src/net/graph_query.h)
@@ -201,6 +201,7 @@ if (NOT NCODE_DISABLE_TESTS)
    add_test_exec(stats_test src/stats_test.cc ncode)
    add_test_exec(status_test src/status_test.cc ncode)
    add_test_exec(statusor_test src/statusor_test.cc ncode)
+   add_test_exec(bloom_test src/bloom_test.cc ncode)
 
    add_test_exec(net_common_test src/net/net_common_test.cc ncode)
    add_test_exec(net_gen_test src/net/net_gen_test.cc ncode)

@@ -308,6 +308,35 @@ void StatusOr<T>::IgnoreError() const {
   // no-op
 }
 
+// Internal helper for concatenating macro values.
+#define STATUS_MACROS_CONCAT_NAME_INNER(x, y) x##y
+#define STATUS_MACROS_CONCAT_NAME(x, y) STATUS_MACROS_CONCAT_NAME_INNER(x, y)
+
+template <typename T>
+Status DoAssignOrReturn(T& lhs, StatusOr<T> result) {  // NOLINT
+  if (result.ok()) {
+    lhs = result.ValueOrDie();
+  }
+  return result.status();
+}
+
+#define ASSIGN_OR_RETURN_IMPL(status, lhs, rexpr)       \
+  ::nc::Status status = DoAssignOrReturn(lhs, (rexpr)); \
+  if (!status.ok()) return status;
+
+// Executes an expression that returns a StatusOr, extracting its value
+// into the variable defined by lhs (or returning on error).
+//
+// Example: Assigning to an existing value
+//   ValueType value;
+//   ASSIGN_OR_RETURN(value, MaybeGetValue(arg));
+//
+// WARNING: ASSIGN_OR_RETURN expands into multiple statements; it cannot be used
+//  in a single statement (e.g. as the body of an if statement without {})!
+#define ASSIGN_OR_RETURN(lhs, rexpr) \
+  ASSIGN_OR_RETURN_IMPL(             \
+      STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr);
+
 }  // namespace nc
 
 #endif  // TENSORFLOW_STREAM_EXECUTOR_LIB_STATUSOR_H_
