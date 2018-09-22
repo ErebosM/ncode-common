@@ -519,6 +519,31 @@ class CountdownTimer {
   std::chrono::nanoseconds budget_;
 };
 
+// Records the time after creation. Optionally can add elapsed time until
+// destruction to a value.
+class Timer {
+ public:
+  Timer(std::chrono::nanoseconds* total_duration = nullptr);
+
+  ~Timer();
+
+  std::chrono::nanoseconds TimeSoFarNanos() const;
+
+  std::chrono::microseconds TimeSoFarMicros() const {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        TimeSoFarNanos());
+  }
+
+  std::chrono::milliseconds TimeSoFarMillis() const {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        TimeSoFarNanos());
+  }
+
+ private:
+  std::chrono::nanoseconds start_time_;
+  std::chrono::nanoseconds* total_duration_;
+};
+
 // Generates a random string of a given length. The string will contain
 // A-Za-z0-9.
 std::string RandomString(size_t length);

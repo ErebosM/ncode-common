@@ -174,4 +174,32 @@ uint64_t GetRandomId(std::function<bool(uint64_t)> id_taken,
   return GetRandomIdHelper(id_taken, &new_rnd);
 }
 
+static std::chrono::nanoseconds TimeNow() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch());
+}
+
+Timer::Timer(std::chrono::nanoseconds* total_duration)
+    : start_time_(TimeNow()), total_duration_(total_duration) {}
+
+Timer::~Timer() {
+  if (total_duration_ == nullptr) {
+    return;
+  }
+
+  std::chrono::nanoseconds current_time = TimeNow();
+  if (current_time > start_time_) {
+    *total_duration_ += (current_time - start_time_);
+  }
+}
+
+std::chrono::nanoseconds Timer::TimeSoFarNanos() const {
+  std::chrono::nanoseconds current_time = TimeNow();
+  if (current_time > start_time_) {
+    return (current_time - start_time_);
+  }
+
+  return std::chrono::nanoseconds::zero();
+}
+
 }  // namespace nc

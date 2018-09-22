@@ -239,5 +239,19 @@ TEST(CountdownTimer, Timer) {
   ASSERT_TRUE(timer.Expired());
 }
 
+TEST(Timer, Timer) {
+  std::chrono::nanoseconds value(0);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  {
+    Timer t(&value);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+  auto t2 = std::chrono::high_resolution_clock::now();
+  std::chrono::nanoseconds duration =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1);
+
+  ASSERT_NEAR(duration.count(), value.count(), 5000000);
+}
+
 }  // namespace
 }  // namespace nc
