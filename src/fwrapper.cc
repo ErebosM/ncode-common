@@ -144,6 +144,18 @@ Status FWrapper::Flush() {
   return Status::OK;
 }
 
+StatusOr<uint64_t> FWrapper::FileSize() {
+  uint64_t current;
+  ASSIGN_OR_RETURN(current, Tell());
+
+  RETURN_IF_ERROR(FseekHelper(file_, 0, SEEK_END));
+  uint64_t file_size;
+  ASSIGN_OR_RETURN(file_size, Tell());
+
+  RETURN_IF_ERROR(FseekHelper(file_, current, SEEK_SET));
+  return file_size;
+}
+
 using RegionAndIndex = std::pair<const FWrapper::FileRegion*, size_t>;
 
 Status FWrapper::ReadBulk(

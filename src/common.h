@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdbool>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -539,6 +540,8 @@ class Timer {
         TimeSoFarNanos());
   }
 
+  void Reset();
+
  private:
   std::chrono::nanoseconds start_time_;
   std::chrono::nanoseconds* total_duration_;
@@ -550,6 +553,31 @@ std::string RandomString(size_t length);
 
 // Prints a double with given precision.
 std::string ToStringMaxDecimals(double value, int decimals);
+
+// Returns true if a sequence of values is sorted.
+template<typename T>
+bool IsSorted(const std::vector<T>& values, bool reverse) {
+  CHECK(values.size() > 0);
+  for (size_t i = 0; i < values.size() - 1; ++i) {
+    if (reverse ? values[i] < values[i + 1] : values[i] > values[i + 1]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Returns true if a sequence has at least one negative value.
+template<typename T>
+bool HasNegativeValues(const std::vector<T>& values) {
+  for (const T& v : values) {
+    if (v < 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 }  // namespace nc
 

@@ -193,6 +193,10 @@ Timer::~Timer() {
   }
 }
 
+void Timer::Reset() {
+  start_time_ = TimeNow();
+}
+
 std::chrono::nanoseconds Timer::TimeSoFarNanos() const {
   std::chrono::nanoseconds current_time = TimeNow();
   if (current_time > start_time_) {

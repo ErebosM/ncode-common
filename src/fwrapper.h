@@ -77,6 +77,9 @@ class FWrapper {
   // Performs all outstanding writes.
   Status Flush();
 
+  // Returns the size of the file.
+  StatusOr<uint64_t> FileSize();
+
   // Reads in a number of regions from the file and calls a callback on each.
   // The regions are not guaranteed to be read in the order given, and the
   // callack's from/to iterator range is temporary storage. This function will

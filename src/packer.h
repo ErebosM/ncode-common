@@ -8,6 +8,7 @@
 
 #include <vector>
 #include "common.h"
+#include "stats.h"
 
 namespace nc {
 
@@ -125,26 +126,33 @@ class RLEField {
  private:
   // A stride is a sequence X, X + t, X + 2t, X + 3t ...
   class Stride {
-   private:
-    explicit Stride(T value) : value_(value), increment_(0), len_(0) {}
+   public:
+    Stride(T value, size_t starting_index)
+        : value_(value),
+          increment_(0),
+          len_(0),
+          starting_index_(starting_index) {}
 
-    const T value_;  // The base of the stride (X).
-    T increment_;    // The increment (t).
-    size_t len_;     // How many elements there are in the sequence.
+   private:
+    const T value_;          // The base of the stride (X).
+    T increment_;            // The increment (t).
+    size_t len_;             // How many elements there are in the sequence.
+    size_t starting_index_;  // The index of the first item in the sequence.
 
     friend class RLEField<T>;
     friend class RLEFieldIterator<T>;
   };
 
  public:
-  RLEField() {}
+  RLEField() : total_num_elements_(0) {}
 
   // Appends a new value to the sequence. "Well-behaved" sequences will occupy
   // less memory and will be faster to add elements. If a new element is added
   // the pointer 'bytes' will be incremented.
   void Append(T value, size_t* bytes) {
+    ++total_num_elements_;
     if (strides_.empty()) {
-      strides_.push_back(Stride(value));
+      strides_.emplace_back(value, 0);
       *bytes += sizeof(Stride);
       return;
     }
@@ -158,13 +166,13 @@ class RLEField {
 
     T expected =
         last_stride.value_ + (last_stride.len_ + 1) * last_stride.increment_;
-
     if (value == expected) {
       last_stride.len_++;
       return;
     }
 
-    strides_.push_back(Stride(value));
+    strides_.emplace_back(value,
+                          last_stride.starting_index_ + last_stride.len_ + 1);
     *bytes += sizeof(Stride);
   }
 
@@ -207,9 +215,49 @@ class RLEField {
     return out;
   }
 
+  size_t total_num_elements() const { return total_num_elements_; }
+
+  T ItemAt(size_t index) const {
+    CHECK(index < total_num_elements_);
+    auto it = std::upper_bound(strides_.begin(), strides_.end(), index,
+                               [](const size_t& lhs, const Stride& rhs) {
+                                 return lhs < rhs.starting_index_;
+                               });
+    CHECK(it != strides_.begin());
+    it = std::next(it, -1);
+
+    const Stride& stride = *it;
+    size_t delta = index - stride.starting_index_;
+    return stride.value_ + delta * stride.increment_;
+  }
+
+  // Number of bytes occupied by the sequence.
+  size_t ByteEstimate() const {
+    return sizeof(Stride) * strides_.capacity() + sizeof(this);
+  }
+
+  // Measures how well the sequence compresses; the higher the better.
+  double CompressionRatio() const {
+    return (sizeof(T) * total_num_elements_) /
+           static_cast<double>(ByteEstimate());
+  }
+
+  // Returns a distribution of the sizes of all sequences.
+  DiscreteDistribution<uint32_t> SequenceLengths() const {
+    std::vector<uint32_t> all_lengths;
+    for (const Stride& stride : strides_) {
+      all_lengths.emplace_back(stride.len_);
+    }
+
+    return DiscreteDistribution<uint32_t>(all_lengths);
+  }
+
  private:
   // The entire sequence is stored as a sequence of strides.
   std::vector<Stride> strides_;
+
+  // Total number of elements.
+  size_t total_num_elements_;
 
   friend class RLEFieldIterator<T>;
 

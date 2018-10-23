@@ -177,5 +177,31 @@ TEST_F(RLEFixture, Append1MIter) {
   ASSERT_EQ(model, vec_);
 }
 
+TEST_F(RLEFixture, RandomAccess) {
+  std::default_random_engine e(2);
+
+  std::vector<uint64_t> model;
+  std::uniform_int_distribution<size_t> sequence_base(1, 1000000);
+  std::uniform_int_distribution<size_t> stride_len(1, 10000);
+  std::uniform_int_distribution<size_t> increment(1, 100);
+  for (size_t i = 0; i < 1000; i++) {
+    size_t base = sequence_base(e);
+    size_t len = stride_len(e);
+    size_t inc = increment(e);
+    for (size_t i = 0; i < len; ++i) {
+      seq_.Append(base + i * inc);
+      model.emplace_back(base + i * inc);
+    }
+  }
+
+  std::vector<uint64_t> all_values = seq_.Restore();
+  ASSERT_EQ(model, all_values);
+  for (size_t i = 0; i < 1000000; ++i) {
+    std::uniform_int_distribution<size_t> rnd_index(0, all_values.size() - 1);
+    size_t index = rnd_index(e);
+    ASSERT_EQ(all_values[index], seq_.ItemAt(index));
+  }
+}
+
 }  // namespace
 }  // namespace nc

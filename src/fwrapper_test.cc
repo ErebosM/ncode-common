@@ -43,6 +43,26 @@ TEST_F(FWrapperFixture, Write) {
   ASSERT_EQ(*contents_ptr, value);
 }
 
+TEST_F(FWrapperFixture, FileSize) {
+  {
+    auto result = FWrapper::Open(kTestFile, "w");
+    ASSERT_TRUE(result.ok());
+
+    FWrapper fw = result.ConsumeValueOrDie();
+    ASSERT_TRUE(fw.WriteUint64(2).ok());
+  }
+
+  {
+    auto result = FWrapper::Open(kTestFile, "r");
+    ASSERT_TRUE(result.ok());
+    FWrapper fw = result.ConsumeValueOrDie();
+
+    ASSERT_TRUE(fw.Seek(1).ok());
+    ASSERT_EQ(8ul, fw.FileSize().ValueOrDie());
+    ASSERT_EQ(1ul, fw.Tell().ValueOrDie());
+  }
+}
+
 TEST_F(FWrapperFixture, WriteRead) {
   {
     auto result = FWrapper::Open(kTestFile, "w");
