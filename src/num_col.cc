@@ -2,82 +2,6 @@
 
 namespace nc {
 
-RangeSet::RangeSet(const std::vector<Range>& ranges, bool already_sorted) {
-  if (ranges.empty()) {
-    return;
-  }
-
-  ranges_ = ranges;
-  if (!already_sorted) {
-    std::sort(ranges_.begin(), ranges_.end());
-  }
-  RemoveOverlap(&ranges_);
-}
-
-RangeSet::RangeSet(std::vector<Range>* ranges, bool already_sorted) {
-  CHECK(ranges != nullptr);
-  if (ranges->empty()) {
-    return;
-  }
-
-  std::swap(ranges_, *ranges);
-  if (!already_sorted) {
-    std::sort(ranges_.begin(), ranges_.end());
-  }
-  RemoveOverlap(&ranges_);
-}
-
-void RangeSet::RemoveOverlap(std::vector<Range>* ranges) {
-  // Will first remove overlap.
-  for (size_t i = 0; i < ranges->size() - 1; ++i) {
-    const Range& next_range = (*ranges)[i + 1];
-    Range& range = (*ranges)[i];
-
-    uint32_t next_start_index = next_range.first;
-    uint32_t start_index = range.first;
-    uint32_t& count = range.second;
-    uint32_t end_index = start_index + count;
-
-    if (next_start_index < end_index) {
-      uint32_t delta = end_index - next_start_index;
-      CHECK(delta <= count);
-      count -= delta;
-    }
-  }
-
-  // And then merge consecutive ranges.
-  std::vector<Range> out;
-  for (size_t i = 0; i < ranges->size(); ++i) {
-    const Range& ri = (*ranges)[i];
-    uint32_t stretch_start = ri.first;
-    uint32_t stretch_end = stretch_start;
-
-    uint32_t stretch_end_i;
-    for (stretch_end_i = i; stretch_end_i < ranges->size(); ++stretch_end_i) {
-      const Range& r_next = (*ranges)[stretch_end_i];
-
-      uint32_t next_index = r_next.first;
-      if (next_index < stretch_end) {
-        LOG(FATAL) << "Ranges overlap, next index " << next_index
-                   << " stretch end " << stretch_end;
-      } else if (next_index == stretch_end) {
-        stretch_end += r_next.second;
-      } else {
-        break;
-      }
-    }
-
-    uint32_t stretch_len = stretch_end - stretch_start;
-    if (stretch_len) {
-      out.push_back({stretch_start, stretch_len});
-    }
-
-    i = stretch_end_i - 1;
-  }
-
-  std::swap(*ranges, out);
-}
-
 void ImmutablePackedIntVector::ZigZagEncode(std::vector<int64_t>* values) {
   for (int64_t& v : *values) {
     v = (v << 1) ^ (v >> 63);
@@ -94,6 +18,9 @@ void ImmutablePackedIntVector::Init(std::vector<int64_t>* values) {
     base_ = 0;
     return;
   }
+
+  max_ = *(std::max_element(values->begin(), values->end()));
+  min_ = *(std::min_element(values->begin(), values->end()));
 
   if (HasNegativeValues(*values)) {
     zig_zagged_ = true;
@@ -117,7 +44,7 @@ void ImmutablePackedIntVector::Init(std::vector<int64_t>* values) {
   }
 }
 
-uint64_t ImmutablePackedIntVector::RawValueAtIndex(uint32_t index) const {
+uint64_t ImmutablePackedIntVector::RawValueAtIndex(size_t index) const {
   uint64_t byte_index = bytes_per_num_ * index;
   CHECK(byte_index < data_.size()) << byte_index << " vs " << data_.size();
   if (data_.size() - byte_index > 8) {
@@ -154,7 +81,7 @@ void ImmutablePackedIntVector::Rebase(std::vector<int64_t>* values) {
   }
 }
 
-int64_t ImmutablePackedIntVector::ValueAt(uint32_t index) const {
+int64_t ImmutablePackedIntVector::at(size_t index) const {
   uint64_t v = base_ + RawValueAtIndex(index);
   if (zig_zagged_) {
     return ZigZagDecode(v);
@@ -174,6 +101,58 @@ ImmutablePackedIntVectorStats ImmutablePackedIntVector::Stats() const {
   out.num_values = size();
   out.byte_size_estimate = sizeof(this) + data_.size();
   return out;
+}
+
+std::string StorageTypeToString(StorageType storage_type) {
+  switch (storage_type) {
+    case INT_PACKED:
+      return "INT_PACKED";
+    case RLE:
+      return "RLE";
+    case BIT_VECTOR:
+      return "BIT_VECTOR";
+  }
+}
+
+std::string IndexTypeToString(IndexType index_type) {
+  switch (index_type) {
+    case UNINDEXED:
+      return "UNINDEXED";
+    case BASIC:
+      return "BASIC";
+    case SORTED_INTERVAL:
+      return "SORTED_INTERVAL";
+    case BIT_RANGES:
+      return "BIT_RANGES";
+  }
+}
+
+static std::string QuantityToString(uint64_t value, const std::string& single,
+                                    const std::string& thousand,
+                                    const std::string& million,
+                                    const std::string& billion) {
+  if (value < 1000) {
+    return std::to_string(value) + single;
+  }
+
+  if (value < 1000 * 1000) {
+    return StrCat(ToStringMaxDecimals(value / 1000.0, 2), thousand);
+  }
+
+  if (value < 1000 * 1000 * 1000) {
+    return StrCat(ToStringMaxDecimals(value / 1000.0 / 1000.0, 2), million);
+  }
+
+  return StrCat(ToStringMaxDecimals(value / 1000.0 / 1000.0 / 1000.0, 2),
+                billion);
+}
+
+std::string BytesToString(uint64_t bytes) {
+  return QuantityToString(bytes, "B", "kB", "MB", "GB");
+}
+
+std::string NumericalQuantityToString(uint64_t value) {
+  return QuantityToString(value, "", "k", "M", "B");
 }
 
 }  // namespace nc

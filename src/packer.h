@@ -144,7 +144,15 @@ class RLEField {
   };
 
  public:
+  using value_type = T;
+
   RLEField() : total_num_elements_(0) {}
+
+  RLEField(const std::vector<T>& values) : total_num_elements_(0) {
+    for (T value : values) {
+      Append(value);
+    }
+  }
 
   // Appends a new value to the sequence. "Well-behaved" sequences will occupy
   // less memory and will be faster to add elements. If a new element is added
@@ -173,6 +181,8 @@ class RLEField {
 
     strides_.emplace_back(value,
                           last_stride.starting_index_ + last_stride.len_ + 1);
+    min_value_ = std::min(min_value_, value);
+    max_value_ = std::min(max_value_, value);
     *bytes += sizeof(Stride);
   }
 
@@ -194,8 +204,8 @@ class RLEField {
     }
 
     return_string += "strides: " + std::to_string(strides_.size()) +
-                     ", elements: " + std::to_string(total) + ", bytes: " +
-                     std::to_string(SizeBytes());
+                     ", elements: " + std::to_string(total) +
+                     ", bytes: " + std::to_string(SizeBytes());
     return return_string;
   }
 
@@ -215,9 +225,19 @@ class RLEField {
     return out;
   }
 
-  size_t total_num_elements() const { return total_num_elements_; }
+  size_t size() const { return total_num_elements_; }
 
-  T ItemAt(size_t index) const {
+  T min_value() const {
+    CHECK(total_num_elements_ > 0);
+    return min_value_;
+  }
+  
+  T max_value() const {
+    CHECK(total_num_elements_ > 0);
+    return max_value_;
+  }
+
+  T at(size_t index) const {
     CHECK(index < total_num_elements_);
     auto it = std::upper_bound(strides_.begin(), strides_.end(), index,
                                [](const size_t& lhs, const Stride& rhs) {
@@ -258,6 +278,9 @@ class RLEField {
 
   // Total number of elements.
   size_t total_num_elements_;
+
+  T min_value_;
+  T max_value_;
 
   friend class RLEFieldIterator<T>;
 

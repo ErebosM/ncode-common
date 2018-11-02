@@ -125,7 +125,7 @@ class Node {
         [](const IndexedInterval<T, V>& lhs, const IndexedInterval<T, V>& rhs) {
           return lhs.first.low < rhs.first.low;
         });
-    
+
     max_sorted_.reserve(min_sorted_.size());
     for (const auto& interval : min_sorted_) {
       max_sorted_.emplace_back(&interval);
@@ -137,10 +137,10 @@ class Node {
         });
   }
 
-  // Returns all intervals that intersect with a point.
-  void Lookup(T point,
-              std::function<void(const Interval<T, V>&, uint32_t index)>
-                  consumer) const {
+  // Produces all intervals that intersect with a point. The signature of
+  // LookupF should be bool(const Interval<T, V>&).
+  template <typename LookupF>
+  void Lookup(T point, LookupF consumer) const {
     if (point < mid_value_) {
       // All ranges end past mid_value_.
       for (const IndexedInterval<T, V>& interval : min_sorted_) {
@@ -148,7 +148,9 @@ class Node {
           break;
         }
 
-        consumer(interval.first, interval.second);
+        if (!consumer(interval.first, interval.second)) {
+          return;
+        }
       }
 
       if (less_) {
@@ -161,7 +163,9 @@ class Node {
           break;
         }
 
-        consumer(interval->first, interval->second);
+        if (!consumer(interval->first, interval->second)) {
+          return;
+        }
       }
 
       if (more_) {
@@ -169,7 +173,9 @@ class Node {
       }
     } else {
       for (const IndexedInterval<T, V>& interval : min_sorted_) {
-        consumer(interval.first, interval.second);
+        if (!consumer(interval.first, interval.second)) {
+          return;
+        }
       }
     }
   }
@@ -225,9 +231,10 @@ class TreeRoot {
               });
   }
 
-  void Lookup(T point,
-              std::function<void(const Interval<T, V>&, uint32_t index)>
-                  consumer) const {
+  // Looks up intervals that contain single point. The signature of LookupF
+  // should be bool(const Interval<T, V>&, uint32_t).
+  template <typename LookupF>
+  void Lookup(T point, LookupF consumer) const {
     if (!root_) {
       return;
     }
@@ -235,9 +242,10 @@ class TreeRoot {
     root_->Lookup(point, consumer);
   }
 
-  void Lookup(T min_point, T max_point,
-              std::function<void(const Interval<T, V>&, uint32_t index)>
-                  consumer) const {
+  // Looks up intervals that have at least one value contained in a range. The
+  // signature of LookupF should be bool(const Interval<T, V>&, uint32_t).
+  template <typename LookupF>
+  void Lookup(T min_point, T max_point, LookupF consumer) const {
     if (!root_) {
       return;
     }
@@ -258,7 +266,9 @@ class TreeRoot {
       const IndexedInterval<T, V>* interval = it->second;
       uint32_t interval_index = interval->second;
       if (!already_consumed[interval_index]) {
-        consumer(interval->first, interval->second);
+        if (!consumer(interval->first)) {
+          return;
+        }
         already_consumed[interval_index] = true;
       }
 
@@ -271,9 +281,13 @@ class TreeRoot {
     Lookup(point, [&already_consumed, &consumer](const Interval<T, V>& interval,
                                                  uint32_t interval_index) {
       if (!already_consumed[interval_index]) {
-        consumer(interval, interval_index);
+        if (!consumer(interval)) {
+          return false;
+        }
         already_consumed[interval_index] = true;
       }
+
+      return true;
     });
   }
 

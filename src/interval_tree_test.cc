@@ -15,6 +15,7 @@ static std::vector<TestInterval> LookupWrapper(const TestTree& tree,
   tree.Lookup(point, [&out](const TestInterval& interval, uint32_t i) {
     Unused(i);
     out.emplace_back(interval);
+    return true;
   });
 
   return out;
