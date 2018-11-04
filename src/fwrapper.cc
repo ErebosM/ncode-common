@@ -145,11 +145,11 @@ Status FWrapper::Flush() {
 }
 
 StatusOr<uint64_t> FWrapper::FileSize() {
-  uint64_t current;
+  uint64_t current = 0;
   ASSIGN_OR_RETURN(current, Tell());
 
   RETURN_IF_ERROR(FseekHelper(file_, 0, SEEK_END));
-  uint64_t file_size;
+  uint64_t file_size = 0;
   ASSIGN_OR_RETURN(file_size, Tell());
 
   RETURN_IF_ERROR(FseekHelper(file_, current, SEEK_SET));

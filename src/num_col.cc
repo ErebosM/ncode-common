@@ -115,6 +115,8 @@ std::string StorageTypeToString(StorageType storage_type) {
     case DOUBLE_VECTOR:
       return "DOUBLE_VECTOR";
   }
+
+  return "";
 }
 
 std::string IndexTypeToString(IndexType index_type) {
@@ -128,6 +130,8 @@ std::string IndexTypeToString(IndexType index_type) {
     case BIT_RANGES:
       return "BIT_RANGES";
   }
+
+  return "";
 }
 
 static std::string QuantityToString(uint64_t value, const std::string& single,

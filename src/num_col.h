@@ -340,9 +340,9 @@ class IntegerStorageChunk {
 
   uint64_t IndexByteEstimate() const;
 
-  IndexType IndexType() const;
+  IndexType GetIndexType() const;
 
-  StorageType StorageType() const;
+  StorageType GetStorageType() const;
 
   template <typename ConsumerF>
   void ConsumeRanges(int64_t from, int64_t to, ConsumerF consumer);
@@ -380,9 +380,9 @@ class BoolStorageChunk {
 
   uint64_t IndexByteEstimate() const;
 
-  IndexType IndexType() const;
+  IndexType GetIndexType() const;
 
-  StorageType StorageType() const;
+  StorageType GetStorageType() const;
 
   template <typename ConsumerF>
   void ConsumeRanges(bool from, bool to, ConsumerF consumer);
@@ -417,9 +417,9 @@ class DoubleStorageChunk {
 
   uint64_t IndexByteEstimate() const;
 
-  IndexType IndexType() const;
+  IndexType GetIndexType() const;
 
-  StorageType StorageType() const;
+  StorageType GetStorageType() const;
 
   double MinValue() const;
 
@@ -497,9 +497,9 @@ class Storage {
         index_sizes;
     for (const auto& chunk : chunks_) {
       uint64_t storage_size_bytes = chunk->StorageByteEstimate();
-      StorageType storage_type = chunk->StorageType();
+      StorageType storage_type = chunk->GetStorageType();
       uint64_t index_size_bytes = chunk->IndexByteEstimate();
-      IndexType index_type = chunk->IndexType();
+      IndexType index_type = chunk->GetIndexType();
 
       storage_sizes[storage_type].emplace_back(storage_size_bytes);
       index_sizes[storage_type][index_type].emplace_back(index_size_bytes);
@@ -919,7 +919,7 @@ uint64_t IntegerStorageChunk<I>::IndexByteEstimate() const {
 }
 
 template <typename I>
-IndexType IntegerStorageChunk<I>::IndexType() const {
+IndexType IntegerStorageChunk<I>::GetIndexType() const {
   std::lock_guard<std::mutex> lock(index_mutex_);
 
   if (basic_index_) {
@@ -934,7 +934,7 @@ IndexType IntegerStorageChunk<I>::IndexType() const {
 }
 
 template <typename I>
-StorageType IntegerStorageChunk<I>::StorageType() const {
+StorageType IntegerStorageChunk<I>::GetStorageType() const {
   if (packed_int_vector_) {
     return StorageType::INT_PACKED;
   }
@@ -1136,7 +1136,7 @@ uint64_t BoolStorageChunk<I>::IndexByteEstimate() const {
 }
 
 template <typename I>
-IndexType BoolStorageChunk<I>::IndexType() const {
+IndexType BoolStorageChunk<I>::GetIndexType() const {
   std::lock_guard<std::mutex> lock(index_mutex_);
   if (!indexed_) {
     return UNINDEXED;
@@ -1145,7 +1145,7 @@ IndexType BoolStorageChunk<I>::IndexType() const {
 }
 
 template <typename I>
-StorageType BoolStorageChunk<I>::StorageType() const {
+StorageType BoolStorageChunk<I>::GetStorageType() const {
   if (bool_vector_) {
     return BIT_VECTOR;
   }
@@ -1274,7 +1274,7 @@ uint64_t DoubleStorageChunk<I>::IndexByteEstimate() const {
 }
 
 template <typename I>
-IndexType DoubleStorageChunk<I>::IndexType() const {
+IndexType DoubleStorageChunk<I>::GetIndexType() const {
   std::lock_guard<std::mutex> lock(index_mutex_);
   if (!indexed_) {
     return UNINDEXED;
@@ -1283,7 +1283,7 @@ IndexType DoubleStorageChunk<I>::IndexType() const {
 }
 
 template <typename I>
-StorageType DoubleStorageChunk<I>::StorageType() const {
+StorageType DoubleStorageChunk<I>::GetStorageType() const {
   if (double_vector_) {
     return DOUBLE_VECTOR;
   }
