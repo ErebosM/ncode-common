@@ -1,6 +1,7 @@
 #include "num_col.h"
 
 namespace nc {
+namespace num_col {
 
 void ImmutablePackedIntVector::ZigZagEncode(std::vector<int64_t>* values) {
   for (int64_t& v : *values) {
@@ -111,6 +112,8 @@ std::string StorageTypeToString(StorageType storage_type) {
       return "RLE";
     case BIT_VECTOR:
       return "BIT_VECTOR";
+    case DOUBLE_VECTOR:
+      return "DOUBLE_VECTOR";
   }
 }
 
@@ -155,4 +158,5 @@ std::string NumericalQuantityToString(uint64_t value) {
   return QuantityToString(value, "", "k", "M", "B");
 }
 
+}  // namespace num_col
 }  // namespace nc

@@ -5,6 +5,7 @@
 #include "packer.h"
 
 namespace nc {
+namespace num_col {
 namespace {
 
 TEST(RangeSet, Init) {
@@ -209,26 +210,6 @@ TEST(SortedSubsequence, IncreasingRepeated) {
   ASSERT_EQ(ss_model, SortedSubsequence<>::Get(v));
 }
 
-TEST(SortedSubsequence, LotsOfValues) {
-  std::mt19937 rnd(1);
-  std::uniform_int_distribution<int64_t> dist;
-
-  std::vector<int64_t> values;
-  for (size_t i = 0; i < 1000000; ++i) {
-    values.emplace_back(dist(rnd));
-  }
-
-  ImmutablePackedIntVector v(values);
-
-  const std::vector<SortedSubsequence<>>& ss = SortedSubsequence<>::Get(v);
-  LOG(INFO) << ss.size();
-  LOG(INFO) << sizeof(SortedSubsequence<>) << " " << sizeof(Range<>);
-
-  // std::vector<SortedSubsequence> ss_model = {
-  //     {{2, 1}, false}, {{0, 2}, true}, {{3, 1}, true}};
-  // ASSERT_EQ(ss_model, ss);
-}
-
 TEST(SortedSubsequence, BadRange) {
   ASSERT_DEATH(SortedSubsequence<> ss({0, 0}, true), ".*");
 }
@@ -267,14 +248,6 @@ TEST(UpperBound, Increasing) {
 
   ASSERT_EQ(8ul, ss.Bound(v, 101, false));
 }
-
-// TEST(ValuesInRange, DecreasingLarge) {
-//   ImmutablePackedIntVector v({7692698082559361259L, 4064269471072392264L});
-//   SortedSubsequence<int64_t> ss({0, 2}, false);
-//
-//   ASSERT_EQ(ss.IndicesOfValuesInRange(v, 7697914927906512855L,
-//   1082636226378482417L), Range(0, 8));
-// }
 
 TEST(ValuesInRange, Increasing) {
   ImmutablePackedIntVector v({0, 1, 2, 50, 50, 80, 100, 101});
@@ -332,8 +305,8 @@ TEST(ValuesInRange, Decreasing) {
   ASSERT_EQ(ss.IndicesOfValuesInRange(v, 100, 100), Range<>(1, 1));
 }
 
-template <typename Index>
-std::vector<Range<>> GenerateRanges(Index& index, int64_t from, int64_t to) {
+template <typename T, typename Index>
+std::vector<Range<>> GenerateRanges(Index& index, T from, T to) {
   std::vector<Range<>> ranges;
   index.ConsumeRanges(from, to, [&ranges](const Range<>& range) {
     ranges.emplace_back(range);
@@ -362,7 +335,8 @@ TEST(Index, ValuesDoubleIncrement) {
 
   ASSERT_EQ(RangeSet<>(GenerateRanges(index, 0, 101)),
             RangeSet<>(std::vector<Range<>>({{0, 16}})));
-  ASSERT_EQ(RangeSet<>(GenerateRanges(index, 1, 50)), RangeSet<>({{1, 4}, {9, 4}}));
+  ASSERT_EQ(RangeSet<>(GenerateRanges(index, 1, 50)),
+            RangeSet<>({{1, 4}, {9, 4}}));
   ASSERT_EQ(RangeSet<>(GenerateRanges(index, 5, 150)),
             RangeSet<>({{3, 5}, {11, 5}}));
 }
@@ -385,7 +359,7 @@ TEST(Index, Random) {
   std::uniform_int_distribution<int64_t> dist(-10000, 10000);
 
   std::vector<int64_t> values;
-  for (size_t i = 0; i < 10000000; ++i) {
+  for (size_t i = 0; i < 100000; ++i) {
     values.emplace_back(dist(rnd));
   }
 
@@ -394,134 +368,81 @@ TEST(Index, Random) {
   ImmutablePackedIntVector v(values);
   SortedIntervalIndex<ImmutablePackedIntVector> interval_index(&v);
   BasicIndex<int64_t> basic_index(v);
-  LOG(INFO) << "Index sizes " << interval_index.ByteEstimate() << " "
-            << basic_index.ByteEstimate();
 
   std::uniform_int_distribution<int64_t> range_dist(min, max);
   for (size_t i = 0; i < 100; ++i) {
-    int64_t from = dist(rnd);
-    int64_t to = dist(rnd);
+    int64_t from = range_dist(rnd);
+    int64_t to = range_dist(rnd);
     if (to < from) {
       std::swap(from, to);
     }
 
-    Timer t;
-    std::vector<Range<>> to_compare_basic = GenerateRanges(basic_index, from, to);
-    LOG(INFO) << "B " << t.TimeSoFarMillis().count() << " "
-              << to_compare_basic.size();
-
-    t.Reset();
+    std::vector<Range<>> to_compare_basic =
+        GenerateRanges(basic_index, from, to);
     std::vector<Range<>> to_compare_interval =
         GenerateRanges(interval_index, from, to);
-    LOG(INFO) << "I " << t.TimeSoFarMillis().count();
-
-    t.Reset();
     std::vector<Range<>> to_compare_baseline = FindSlow(values, from, to);
-    LOG(INFO) << "BL " << t.TimeSoFarMillis().count();
 
     ASSERT_EQ(RangeSet<>(to_compare_baseline), RangeSet<>(to_compare_interval));
     ASSERT_EQ(RangeSet<>(to_compare_baseline), RangeSet<>(to_compare_basic));
   }
 }
 
-TEST(IntegerStorage, Random) {
+template <typename T>
+class StorageTest : public ::testing::Test {};
+
+using StorageTypes = ::testing::Types<
+    std::tuple<int64_t, IntegerStorage, std::uniform_int_distribution<int64_t>>,
+    std::tuple<bool, BoolStorage, std::uniform_int_distribution<bool>>,
+    std::tuple<double, DoubleStorage, std::uniform_real_distribution<double>>>;
+TYPED_TEST_CASE(StorageTest, StorageTypes);
+
+TYPED_TEST(StorageTest, RandomValues) {
+  using ValueType = typename std::tuple_element<0, TypeParam>::type;
+  using StorageType = typename std::tuple_element<1, TypeParam>::type;
+  using RndType = typename std::tuple_element<2, TypeParam>::type;
+
   std::mt19937 rnd(1);
-  std::uniform_int_distribution<int64_t> dist(-10000, 10000);
+  RndType dist;
 
-  std::vector<int64_t> values;
-  for (size_t i = 0; i < 10000000; ++i) {
-    values.emplace_back(dist(rnd));
+  std::vector<ValueType> values;
+  for (size_t i = 0; i < 100000; ++i) {
+    values.push_back(dist(rnd));
   }
-  int64_t max = *std::max_element(values.begin(), values.end());
-  int64_t min = *std::min_element(values.begin(), values.end());
+  ValueType max = *std::max_element(values.begin(), values.end());
+  ValueType min = *std::min_element(values.begin(), values.end());
 
-  IntegerStorage storage;
-  for (int64_t value : values) {
+  StorageType storage;
+  for (ValueType value : values) {
     storage.Add(value);
   }
-  LOG(INFO) << "Done adding";
-  std::cout << storage.ToString();
 
   std::vector<std::thread> workers;
-  for (size_t thread_i = 0; thread_i < 1; ++thread_i) {
-    workers.emplace_back([thread_i, min, max, &dist, &storage, &values] {
+  for (size_t thread_i = 0; thread_i < 10; ++thread_i) {
+    workers.emplace_back([thread_i, min, max, &storage, &values] {
       std::mt19937 rnd(thread_i);
-      std::uniform_int_distribution<int64_t> range_dist(min, max);
-      for (size_t i = 0; i < 100; ++i) {
-        int64_t from = dist(rnd);
-        int64_t to = dist(rnd);
+      RndType range_dist(min, max);
+      for (size_t i = 0; i < 10; ++i) {
+        ValueType from = range_dist(rnd);
+        ValueType to = range_dist(rnd);
         if (to < from) {
           std::swap(from, to);
         }
 
-        Timer t;
         std::vector<Range<>> to_compare = GenerateRanges(storage, from, to);
-        LOG(INFO) << "I " << thread_i << " " << t.TimeSoFarMillis().count()
-                  << " " << i;
-
-        // std::vector<Range> to_compare_baseline = FindSlow(values, from, to);
-        // ASSERT_EQ(RangeSet(to_compare_baseline), RangeSet(to_compare))
-        //     << RangeSet(to_compare_baseline).ToString() << " vs "
-        //     << RangeSet(to_compare).ToString();
+        std::vector<Range<>> to_compare_baseline = FindSlow(values, from, to);
+        ASSERT_EQ(RangeSet<>(to_compare_baseline), RangeSet<>(to_compare))
+            << RangeSet<>(to_compare_baseline).ToString() << " vs "
+            << RangeSet<>(to_compare).ToString();
       }
     });
   }
 
-  for (size_t i = 0; i < 1; ++i) {
+  for (size_t i = 0; i < 10; ++i) {
     workers[i].join();
   }
-
-  std::cout << storage.ToString();
-}
-
-TEST(BoolStorage, Random) {
-  std::mt19937 rnd(1);
-  std::uniform_int_distribution<int64_t> dist(0, 1);
-
-  std::vector<bool> values;
-  for (size_t i = 0; i < 10000000; ++i) {
-    values.push_back(i);
-  }
-
-  BoolStorage storage;
-  for (bool value : values) {
-    storage.Add(value);
-  }
-  LOG(INFO) << "Done adding";
-  std::cout << storage.ToString();
-
-  std::vector<std::thread> workers;
-  for (size_t thread_i = 0; thread_i < 1; ++thread_i) {
-    workers.emplace_back([thread_i, &dist, &storage, &values] {
-      std::mt19937 rnd(thread_i);
-      std::uniform_int_distribution<int64_t> range_dist(0, 1);
-      for (size_t i = 0; i < 10000; ++i) {
-        int64_t from = dist(rnd);
-        int64_t to = dist(rnd);
-        if (to < from) {
-          std::swap(from, to);
-        }
-
-        Timer t;
-        std::vector<Range<>> to_compare = GenerateRanges(storage, from, to);
-        LOG(INFO) << "I " << thread_i << " " << t.TimeSoFarMillis().count()
-                  << " " << i;
-
-        // std::vector<Range> to_compare_baseline =
-        //     FindSlow<bool>(values, from, to);
-        // ASSERT_EQ(RangeSet(to_compare_baseline), RangeSet(to_compare))
-        //     << RangeSet(to_compare_baseline).ToString() << " vs "
-        //     << RangeSet(to_compare).ToString();
-      }
-    });
-  }
-
-  for (size_t i = 0; i < 1; ++i) {
-    workers[i].join();
-  }
-
-  std::cout << storage.ToString();
 }
 
 }  // namespace
+}  // namespace num_col
 }  // namespace nc

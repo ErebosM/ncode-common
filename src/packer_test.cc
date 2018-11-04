@@ -199,7 +199,7 @@ TEST_F(RLEFixture, RandomAccess) {
   for (size_t i = 0; i < 1000000; ++i) {
     std::uniform_int_distribution<size_t> rnd_index(0, all_values.size() - 1);
     size_t index = rnd_index(e);
-    ASSERT_EQ(all_values[index], seq_.ItemAt(index));
+    ASSERT_EQ(all_values[index], seq_.at(index));
   }
 }
 

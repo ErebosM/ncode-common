@@ -12,6 +12,34 @@
 #include "thread_runner.h"
 
 namespace nc {
+namespace num_col {
+
+enum StorageType {
+  // Packed integer values.
+  INT_PACKED,
+  // Run-length encoded values.template
+  RLE,
+  // A bit vector.
+  BIT_VECTOR,
+  // A vector of double values.
+  DOUBLE_VECTOR
+};
+
+enum IndexType {
+  // Not indexed yet.
+  UNINDEXED,
+  // Basic sorted index.
+  BASIC,
+  // Sorted interval index.
+  SORTED_INTERVAL,
+  // True/false ranges, used on bool storage.
+  BIT_RANGES
+};
+
+std::string StorageTypeToString(StorageType storage_type);
+std::string IndexTypeToString(IndexType index_type);
+std::string BytesToString(uint64_t bytes);
+std::string NumericalQuantityToString(uint64_t value);
 
 // A range of indices. The first value is the starting index, the second is the
 // number of indices from the starting one. The range is empty if this value is
@@ -143,6 +171,43 @@ class ImmutablePackedIntVector {
   DISALLOW_COPY_AND_ASSIGN(ImmutablePackedIntVector);
 };
 
+class ImmutableDoubleVector {
+ public:
+  using value_type = double;
+
+  ImmutableDoubleVector(const std::vector<double>& values) : data_(values) {
+    if (data_.empty()) {
+      return;
+    }
+
+    min_ = *(std::min_element(values.begin(), values.end()));
+    max_ = *(std::max_element(values.begin(), values.end()));
+  }
+
+  // Returns the number of elements in the sequence.
+  size_t size() const { return data_.size(); }
+
+  // Returns the value at a given index.
+  double at(size_t index) const { return data_[index]; }
+
+  // Estaimates memory consumption.
+  uint64_t ByteEstimate() const {
+    return data_.capacity() * sizeof(double) + sizeof(this);
+  }
+
+  double min_value() const { return min_; }
+
+  double max_value() const { return max_; }
+
+ private:
+  // The vector.
+  std::vector<double> data_;
+
+  // Max/min values.
+  double min_;
+  double max_;
+};
+
 // Increasing or decreasing subsequence.
 template <typename I = size_t>
 class SortedSubsequence {
@@ -237,91 +302,24 @@ template <typename T, typename I = size_t>
 class BasicIndex {
  public:
   template <typename Container>
-  BasicIndex(const Container& container) {
-    CHECK(container.size() <= std::numeric_limits<I>::max());
-    std::map<T, std::vector<I>> ranges;
-    for (I i = 0; i < container.size(); ++i) {
-      T value = container.at(i);
-      ranges[value].emplace_back(i);
-    }
-
-    for (const auto& value_and_indices : ranges) {
-      T value = value_and_indices.first;
-      const std::vector<I>& indices = value_and_indices.second;
-
-      std::vector<Range<I>> ranges_for_value;
-      for (I index : indices) {
-        ranges_for_value.emplace_back(index, 1);
-      }
-
-      // The RangeSet will sort and combine the ranges.
-      RangeSet<I> range_set(ranges_for_value);
-      for (const Range<I>& range : range_set.ranges()) {
-        values_.emplace_back(value, range);
-      }
-    }
-    values_.shrink_to_fit();
-  }
+  BasicIndex(const Container& container);
 
   uint64_t ByteEstimate() const {
-    return sizeof(std::pair<T, Range<I>>) * values_.capacity();
+    return sizeof(T) * values_.capacity() +
+           sizeof(Range<I>) * ranges_.capacity();
   }
 
   // Consumes ranges one at a time. Type of ConsumerF is bool(const Range&).
   template <typename ConsumerF>
-  void ConsumeRanges(T from, T to, ConsumerF consumer) const {
-    auto it = std::lower_bound(values_.begin(), values_.end(), from,
-                               [](const std::pair<T, Range<I>>& lhs, T rhs) {
-                                 return lhs.first < rhs;
-                               });
-    if (it == values_.end()) {
-      return;
-    }
-
-    while (it != values_.end()) {
-      if (it->first > to) {
-        break;
-      }
-
-      Range<I> range = it->second;
-      if (!consumer(range)) {
-        break;
-      }
-      ++it;
-    }
-  }
+  void ConsumeRanges(T from, T to, ConsumerF consumer) const;
 
  private:
   // For each value a range of indices that have that value. Sorted.
-  std::vector<std::pair<T, Range<I>>> values_;
+  std::vector<T> values_;
+  std::vector<Range<I>> ranges_;
 
   DISALLOW_COPY_AND_ASSIGN(BasicIndex);
 };
-
-enum StorageType {
-  // Packed integer values.
-  INT_PACKED,
-  // Run-length encoded values.template
-  RLE,
-  // A bit vector.
-  BIT_VECTOR
-};
-
-enum IndexType {
-  // Not indexed yet.
-  UNINDEXED,
-  // Basic sorted index.
-  BASIC,
-  // Sorted interval index.
-  SORTED_INTERVAL,
-  // True/false ranges, used on bool storage.
-  BIT_RANGES
-};
-
-std::string StorageTypeToString(StorageType storage_type);
-std::string IndexTypeToString(IndexType index_type);
-std::string BytesToString(uint64_t bytes);
-std::string NumericalQuantityToString(uint64_t value);
 
 template <typename I>
 class IntegerStorageChunk {
@@ -359,7 +357,8 @@ class IntegerStorageChunk {
   // Indices, only one will be set if the storage is indexed at all. Protected
   // by a mutex.
   std::unique_ptr<BasicIndex<int64_t, I>> basic_index_;
-  std::unique_ptr<SortedIntervalIndex<ImmutablePackedIntVector, I>> packed_index_;
+  std::unique_ptr<SortedIntervalIndex<ImmutablePackedIntVector, I>>
+      packed_index_;
   std::unique_ptr<SortedIntervalIndex<RLEField<int64_t>>> rle_index_;
 
   bool indexed_;
@@ -371,128 +370,25 @@ class BoolStorageChunk {
  public:
   using IType = I;
 
-  BoolStorageChunk(const std::vector<bool>& values)
-      : bool_vector_(make_unique<std::vector<bool>>(values)),
-        rle_(make_unique<RLEField<bool>>(values)),
-        indexed_(false) {
-    uint64_t bool_vector_bytes_estimate = bool_vector_->capacity() / 8;
-    if (bool_vector_bytes_estimate > rle_->ByteEstimate()) {
-      bool_vector_.reset();
-    } else {
-      rle_.reset();
-    }
-  }
+  BoolStorageChunk(const std::vector<bool>& values);
 
-  bool at(I index) const {
-    if (bool_vector_) {
-      return (*bool_vector_)[index];
-    }
+  bool at(I index) const;
 
-    if (rle_) {
-      return rle_->at(index);
-    }
+  I size() const;
 
-    LOG(FATAL) << "Storage not set";
-    return false;
-  }
+  uint64_t StorageByteEstimate() const;
 
-  I size() const {
-    if (bool_vector_) {
-      return bool_vector_->size();
-    }
+  uint64_t IndexByteEstimate() const;
 
-    if (rle_) {
-      return rle_->size();
-    }
+  IndexType IndexType() const;
 
-    LOG(FATAL) << "Storage not set";
-    return 0;
-  }
-
-  uint64_t StorageByteEstimate() const {
-    if (bool_vector_) {
-      return bool_vector_->size() / 8;
-    }
-
-    if (rle_) {
-      return rle_->ByteEstimate();
-    }
-
-    LOG(FATAL) << "Storage not set";
-    return 0;
-  }
-
-  uint64_t IndexByteEstimate() const {
-    std::lock_guard<std::mutex> lock(index_mutex_);
-
-    return true_ranges_.capacity() * sizeof(Range<I>) +
-           false_ranges_.capacity() * sizeof(Range<I>);
-  }
-
-  IndexType IndexType() const {
-    std::lock_guard<std::mutex> lock(index_mutex_);
-    if (!indexed_) {
-      return UNINDEXED;
-    }
-    return BIT_RANGES;
-  }
-
-  StorageType StorageType() const {
-    if (bool_vector_) {
-      return BIT_VECTOR;
-    }
-
-    if (rle_) {
-      return RLE;
-    }
-
-    LOG(FATAL) << "Storage not set";
-    return BIT_VECTOR;
-  }
+  StorageType StorageType() const;
 
   template <typename ConsumerF>
-  void ConsumeRanges(bool from, bool to, ConsumerF consumer) {
-    CHECK(to >= from);
-    Index();
-
-    if (from == false) {
-      for (const auto& range : false_ranges_) {
-        consumer(range);
-      }
-    }
-
-    if (to == true) {
-      for (const auto& range : true_ranges_) {
-        consumer(range);
-      }
-    }
-  }
+  void ConsumeRanges(bool from, bool to, ConsumerF consumer);
 
  private:
-  void Index() {
-    std::lock_guard<std::mutex> lock(index_mutex_);
-
-    if (indexed_) {
-      return;
-    }
-
-    std::vector<Range<I>> true_indices;
-    std::vector<Range<I>> false_indices;
-
-    uint32_t num_elements = size();
-    for (uint32_t i = 0; i < num_elements; ++i) {
-      if (at(i)) {
-        true_indices.emplace_back(i, 1);
-      } else {
-        false_indices.emplace_back(i, 1);
-      }
-    }
-
-    true_ranges_ = RangeSet<I>(true_indices).ranges();
-    false_ranges_ = RangeSet<I>(false_indices).ranges();
-
-    indexed_ = true;
-  }
+  void Index();
 
   // Only one of those two will be set.
   std::unique_ptr<std::vector<bool>> bool_vector_;
@@ -501,6 +397,46 @@ class BoolStorageChunk {
   // The index is the set of true/false ranges.
   std::vector<Range<I>> true_ranges_;
   std::vector<Range<I>> false_ranges_;
+
+  bool indexed_;
+  mutable std::mutex index_mutex_;
+};
+
+template <typename I>
+class DoubleStorageChunk {
+ public:
+  using IType = I;
+
+  DoubleStorageChunk(const std::vector<double>& values);
+
+  double at(I index) const;
+
+  I size() const;
+
+  uint64_t StorageByteEstimate() const;
+
+  uint64_t IndexByteEstimate() const;
+
+  IndexType IndexType() const;
+
+  StorageType StorageType() const;
+
+  double MinValue() const;
+
+  double MaxValue() const;
+
+  template <typename ConsumerF>
+  void ConsumeRanges(double from, double to, ConsumerF consumer);
+
+ private:
+  void Index();
+
+  // Only one of those two will be set.
+  std::unique_ptr<ImmutableDoubleVector> double_vector_;
+  std::unique_ptr<RLEField<double>> rle_;
+
+  // The index is the set of true/false ranges.
+  std::unique_ptr<BasicIndex<double, I>> basic_index_;
 
   bool indexed_;
   mutable std::mutex index_mutex_;
@@ -614,9 +550,9 @@ class Storage {
   }
 
  private:
-  static constexpr uint32_t kChunkSize = 1 << 12;
   using ChunkPtr = std::unique_ptr<ChunkStorageType>;
   using I = typename ChunkStorageType::IType;
+  static constexpr uint32_t kChunkSize = (1 << 16) - 1;
 
   template <typename ConsumerF>
   void ConsumeRangesFromLatest(T from, T to, ConsumerF consumer) {
@@ -642,6 +578,7 @@ class Storage {
 
 using IntegerStorage = Storage<int64_t, IntegerStorageChunk<uint16_t>>;
 using BoolStorage = Storage<bool, BoolStorageChunk<uint16_t>>;
+using DoubleStorage = Storage<double, DoubleStorageChunk<uint16_t>>;
 
 // Implementations
 
@@ -892,7 +829,7 @@ SortedIntervalIndex<Container, I>::GetIntervals(
   return out;
 }
 
-// -------------------- SortedIntervalIndex --------------------
+// -------------------- IntegerStorageChunk --------------------
 
 template <typename I>
 IntegerStorageChunk<I>::IntegerStorageChunk(const std::vector<int64_t>& values)
@@ -1020,8 +957,9 @@ void IntegerStorageChunk<I>::Index() {
 
   if (packed_int_vector_) {
     basic_index_ = make_unique<BasicIndex<int64_t, I>>(*packed_int_vector_);
-    packed_index_ = make_unique<SortedIntervalIndex<ImmutablePackedIntVector, I>>(
-        packed_int_vector_.get());
+    packed_index_ =
+        make_unique<SortedIntervalIndex<ImmutablePackedIntVector, I>>(
+            packed_int_vector_.get());
 
     if (basic_index_->ByteEstimate() > packed_index_->ByteEstimate()) {
       basic_index_.reset();
@@ -1045,7 +983,8 @@ void IntegerStorageChunk<I>::Index() {
 
 template <typename I>
 template <typename ConsumerF>
-void IntegerStorageChunk<I>::ConsumeRanges(int64_t from, int64_t to, ConsumerF consumer) {
+void IntegerStorageChunk<I>::ConsumeRanges(int64_t from, int64_t to,
+                                           ConsumerF consumer) {
   CHECK(to >= from);
   int64_t min = MinValue();
   int64_t max = MaxValue();
@@ -1078,6 +1017,353 @@ void IntegerStorageChunk<I>::ConsumeRanges(int64_t from, int64_t to, ConsumerF c
   LOG(FATAL) << "Index not set";
 }
 
+// -------------------- BasicIndex --------------------
+
+template <typename T, typename I>
+template <typename Container>
+BasicIndex<T, I>::BasicIndex(const Container& container) {
+  CHECK(container.size() <= std::numeric_limits<I>::max());
+  std::map<T, std::vector<I>> ranges;
+  for (I i = 0; i < container.size(); ++i) {
+    T value = container.at(i);
+    ranges[value].emplace_back(i);
+  }
+
+  for (const auto& value_and_indices : ranges) {
+    T value = value_and_indices.first;
+    const std::vector<I>& indices = value_and_indices.second;
+
+    std::vector<Range<I>> ranges_for_value;
+    for (I index : indices) {
+      ranges_for_value.emplace_back(index, 1);
+    }
+
+    // The RangeSet will sort and combine the ranges.
+    RangeSet<I> range_set(ranges_for_value);
+    for (const Range<I>& range : range_set.ranges()) {
+      values_.emplace_back(value);
+      ranges_.emplace_back(range);
+    }
+  }
+  values_.shrink_to_fit();
+  ranges_.shrink_to_fit();
+}
+
+template <typename T, typename I>
+template <typename ConsumerF>
+void BasicIndex<T, I>::ConsumeRanges(T from, T to, ConsumerF consumer) const {
+  auto it = std::lower_bound(values_.begin(), values_.end(), from);
+  if (it == values_.end()) {
+    return;
+  }
+
+  while (it != values_.end()) {
+    if (*it > to) {
+      break;
+    }
+
+    Range<I> range = ranges_[std::distance(values_.begin(), it)];
+    if (!consumer(range)) {
+      break;
+    }
+    ++it;
+  }
+}
+
+// -------------------- BoolStorageChunk --------------------
+
+template <typename I>
+BoolStorageChunk<I>::BoolStorageChunk(const std::vector<bool>& values)
+    : bool_vector_(make_unique<std::vector<bool>>(values)),
+      rle_(make_unique<RLEField<bool>>(values)),
+      indexed_(false) {
+  uint64_t bool_vector_bytes_estimate = bool_vector_->capacity() / 8;
+  if (bool_vector_bytes_estimate > rle_->ByteEstimate()) {
+    bool_vector_.reset();
+  } else {
+    rle_.reset();
+  }
+}
+
+template <typename I>
+bool BoolStorageChunk<I>::at(I index) const {
+  if (bool_vector_) {
+    return (*bool_vector_)[index];
+  }
+
+  if (rle_) {
+    return rle_->at(index);
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return false;
+}
+
+template <typename I>
+I BoolStorageChunk<I>::size() const {
+  if (bool_vector_) {
+    return bool_vector_->size();
+  }
+
+  if (rle_) {
+    return rle_->size();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+uint64_t BoolStorageChunk<I>::StorageByteEstimate() const {
+  if (bool_vector_) {
+    return bool_vector_->size() / 8;
+  }
+
+  if (rle_) {
+    return rle_->ByteEstimate();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+uint64_t BoolStorageChunk<I>::IndexByteEstimate() const {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+
+  return true_ranges_.capacity() * sizeof(Range<I>) +
+         false_ranges_.capacity() * sizeof(Range<I>);
+}
+
+template <typename I>
+IndexType BoolStorageChunk<I>::IndexType() const {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+  if (!indexed_) {
+    return UNINDEXED;
+  }
+  return BIT_RANGES;
+}
+
+template <typename I>
+StorageType BoolStorageChunk<I>::StorageType() const {
+  if (bool_vector_) {
+    return BIT_VECTOR;
+  }
+
+  if (rle_) {
+    return RLE;
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return BIT_VECTOR;
+}
+
+template <typename I>
+template <typename ConsumerF>
+void BoolStorageChunk<I>::ConsumeRanges(bool from, bool to,
+                                        ConsumerF consumer) {
+  CHECK(to >= from);
+  Index();
+
+  if (from == false) {
+    for (const auto& range : false_ranges_) {
+      consumer(range);
+    }
+  }
+
+  if (to == true) {
+    for (const auto& range : true_ranges_) {
+      consumer(range);
+    }
+  }
+}
+
+template <typename I>
+void BoolStorageChunk<I>::Index() {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+
+  if (indexed_) {
+    return;
+  }
+
+  std::vector<Range<I>> true_indices;
+  std::vector<Range<I>> false_indices;
+
+  uint32_t num_elements = size();
+  for (uint32_t i = 0; i < num_elements; ++i) {
+    if (at(i)) {
+      true_indices.emplace_back(i, 1);
+    } else {
+      false_indices.emplace_back(i, 1);
+    }
+  }
+
+  true_ranges_ = RangeSet<I>(true_indices).ranges();
+  false_ranges_ = RangeSet<I>(false_indices).ranges();
+
+  indexed_ = true;
+}
+
+// -------------------- DoubleStorageChunk --------------------
+
+template <typename I>
+DoubleStorageChunk<I>::DoubleStorageChunk(const std::vector<double>& values)
+    : double_vector_(make_unique<ImmutableDoubleVector>(values)),
+      rle_(make_unique<RLEField<double>>(values)),
+      indexed_(false) {
+  uint64_t double_vector_bytes_estimate = double_vector_->ByteEstimate();
+  if (double_vector_bytes_estimate > rle_->ByteEstimate()) {
+    double_vector_.reset();
+  } else {
+    rle_.reset();
+  }
+}
+
+template <typename I>
+double DoubleStorageChunk<I>::at(I index) const {
+  if (double_vector_) {
+    return (*double_vector_)[index];
+  }
+
+  if (rle_) {
+    return rle_->at(index);
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+I DoubleStorageChunk<I>::size() const {
+  if (double_vector_) {
+    return double_vector_->size();
+  }
+
+  if (rle_) {
+    return rle_->size();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+uint64_t DoubleStorageChunk<I>::StorageByteEstimate() const {
+  if (double_vector_) {
+    return double_vector_->ByteEstimate();
+  }
+
+  if (rle_) {
+    return rle_->ByteEstimate();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+uint64_t DoubleStorageChunk<I>::IndexByteEstimate() const {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+
+  uint64_t total = 0;
+  if (basic_index_) {
+    total += basic_index_->ByteEstimate();
+  }
+
+  return total;
+}
+
+template <typename I>
+IndexType DoubleStorageChunk<I>::IndexType() const {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+  if (!indexed_) {
+    return UNINDEXED;
+  }
+  return BASIC;
+}
+
+template <typename I>
+StorageType DoubleStorageChunk<I>::StorageType() const {
+  if (double_vector_) {
+    return DOUBLE_VECTOR;
+  }
+
+  if (rle_) {
+    return RLE;
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return BIT_VECTOR;
+}
+
+template <typename I>
+double DoubleStorageChunk<I>::MinValue() const {
+  if (double_vector_) {
+    return double_vector_->min_value();
+  }
+
+  if (rle_) {
+    return rle_->min_value();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+double DoubleStorageChunk<I>::MaxValue() const {
+  if (double_vector_) {
+    return double_vector_->max_value();
+  }
+
+  if (rle_) {
+    return rle_->max_value();
+  }
+
+  LOG(FATAL) << "Storage not set";
+  return 0;
+}
+
+template <typename I>
+template <typename ConsumerF>
+void DoubleStorageChunk<I>::ConsumeRanges(double from, double to,
+                                          ConsumerF consumer) {
+  CHECK(to >= from);
+  double min = MinValue();
+  double max = MaxValue();
+  if (to < min || from > max) {
+    return;
+  }
+
+  if (to >= max && from <= min) {
+    consumer(Range<I>(0, size()));
+    return;
+  }
+
+  CHECK(to >= from);
+  Index();
+
+  basic_index_->ConsumeRanges(from, to, consumer);
+}
+
+template <typename I>
+void DoubleStorageChunk<I>::Index() {
+  std::lock_guard<std::mutex> lock(index_mutex_);
+
+  if (indexed_) {
+    return;
+  }
+
+  if (double_vector_) {
+    basic_index_ = make_unique<BasicIndex<double, I>>(*double_vector_);
+  } else if (rle_) {
+    basic_index_ = make_unique<BasicIndex<double, I>>(*rle_);
+  }
+
+  indexed_ = true;
+}
+
+}  // namespace num_col
 }  // namespace nc
 
 #endif
