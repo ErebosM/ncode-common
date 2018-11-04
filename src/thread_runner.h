@@ -9,6 +9,8 @@
 #include <mutex>
 #include <atomic>
 
+#include "common.h"
+
 namespace nc {
 
 // Runs instances of a given function in parallel. At any given moment in time
