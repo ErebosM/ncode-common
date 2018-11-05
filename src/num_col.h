@@ -446,7 +446,7 @@ template <typename T, typename ChunkStorageType>
 class Storage {
  public:
   // The value at a given index.
-  int64_t at(size_t index) const {
+  T at(size_t index) const {
     size_t base = index / kChunkSize;
     size_t offset = index % kChunkSize;
 

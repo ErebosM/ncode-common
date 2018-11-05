@@ -391,23 +391,48 @@ TEST(Index, Random) {
 template <typename T>
 class StorageTest : public ::testing::Test {};
 
+template <typename T>
+T GenerateRandom(std::mt19937* rnd, T min = std::numeric_limits<T>::min(),
+                 T max = std::numeric_limits<T>::max()) {
+  Unused(min);
+  Unused(max);
+  Unused(rnd);
+  LOG(FATAL) << "Not implemented";
+}
+
+template <>
+int64_t GenerateRandom(std::mt19937* rnd, int64_t min, int64_t max) {
+  std::uniform_int_distribution<int64_t> dist(min, max);
+  return dist(*rnd);
+}
+
+template <>
+double GenerateRandom(std::mt19937* rnd, double min, double max) {
+  std::uniform_real_distribution<double> dist(min, max);
+  return dist(*rnd);
+}
+
+template <>
+bool GenerateRandom(std::mt19937* rnd, bool min, bool max) {
+  std::uniform_int_distribution<int64_t> dist(min, max);
+  return static_cast<bool>(dist(*rnd));
+}
+
 using StorageTypes = ::testing::Types<
-    std::tuple<int64_t, IntegerStorage, std::uniform_int_distribution<int64_t>>,
-    std::tuple<bool, BoolStorage, std::uniform_int_distribution<bool>>,
-    std::tuple<double, DoubleStorage, std::uniform_real_distribution<double>>>;
+    std::tuple<int64_t, IntegerStorage>,
+    std::tuple<bool, BoolStorage>,
+    std::tuple<double, DoubleStorage>>;
 TYPED_TEST_CASE(StorageTest, StorageTypes);
 
 TYPED_TEST(StorageTest, RandomValues) {
   using ValueType = typename std::tuple_element<0, TypeParam>::type;
   using StorageType = typename std::tuple_element<1, TypeParam>::type;
-  using RndType = typename std::tuple_element<2, TypeParam>::type;
 
   std::mt19937 rnd(1);
-  RndType dist;
 
   std::vector<ValueType> values;
   for (size_t i = 0; i < 100000; ++i) {
-    values.push_back(dist(rnd));
+    values.push_back(GenerateRandom<ValueType>(&rnd));
   }
   ValueType max = *std::max_element(values.begin(), values.end());
   ValueType min = *std::min_element(values.begin(), values.end());
@@ -420,11 +445,10 @@ TYPED_TEST(StorageTest, RandomValues) {
   std::vector<std::thread> workers;
   for (size_t thread_i = 0; thread_i < 10; ++thread_i) {
     workers.emplace_back([thread_i, min, max, &storage, &values] {
-      std::mt19937 rnd(thread_i);
-      RndType range_dist(min, max);
+      std::mt19937 rnd_inner(thread_i);
       for (size_t i = 0; i < 10; ++i) {
-        ValueType from = range_dist(rnd);
-        ValueType to = range_dist(rnd);
+        ValueType from = GenerateRandom<ValueType>(&rnd_inner, min, max);
+        ValueType to = GenerateRandom<ValueType>(&rnd_inner, min, max);
         if (to < from) {
           std::swap(from, to);
         }
