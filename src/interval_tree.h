@@ -109,7 +109,7 @@ Split(const std::vector<IndexedInterval<T, V>>& intervals) {
     }
   }
 
-  return {less, more, intersecting, point};
+  return std::make_tuple(less, more, intersecting, point);
 }
 
 template <typename T, typename V>
