@@ -60,7 +60,7 @@ T PickPointForSplitting(const std::vector<IndexedInterval<T, V>>& intervals) {
   }
 
   uint64_t best_interval_count = 0;
-  T best_point;
+  T best_point = T();
 
   T delta = max_all - min_all;
   for (size_t i = 0; i < 100; ++i) {

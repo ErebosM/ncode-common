@@ -53,6 +53,57 @@ class RangeSet {
  public:
   RangeSet() {}
 
+  // Returns a RangeSet that contains only ranges that are contained in all of
+  // the given range sets.
+  static RangeSet<I> Intersection(const std::vector<RangeSet>& range_sets) {
+    using HeapElement = std::tuple<I, bool, size_t, const RangeSet<I>*>;
+    size_t count = range_sets.size();
+
+    VectorPriorityQueue<HeapElement, std::greater<HeapElement>> queue_;
+    for (const auto& range_set : range_sets) {
+      CHECK(!range_set.ranges_.empty());
+      I start_index = range_set.ranges_[0].first;
+      queue_.emplace(start_index, true, 0, &range_set);
+    }
+
+    std::vector<Range<I>> ranges;
+    I range_start;
+
+    size_t running_count = 0;
+    while (!queue_.empty()) {
+      HeapElement smallest_element = queue_.PopTop();
+
+      I current_index = std::get<0>(smallest_element);
+      bool start_of_range = std::get<1>(smallest_element);
+      size_t current_i = std::get<2>(smallest_element);
+      const RangeSet<I>* range_set = std::get<3>(smallest_element);
+
+      if (start_of_range) {
+        ++running_count;
+        if (running_count == count) {
+          range_start = current_index;
+        }
+      } else {
+        if (running_count == count) {
+          ranges.emplace_back(range_start, current_index - range_start);
+        }
+
+        --running_count;
+        ++current_i;
+      }
+      start_of_range = !start_of_range;
+
+      if (range_set->ranges_.size() != current_i) {
+        const Range<I> current_range = range_set->ranges_[current_i];
+        I index = start_of_range ? current_range.first
+                                 : current_range.first + current_range.second;
+        queue_.emplace(index, start_of_range, current_i, range_set);
+      }
+    }
+
+    return RangeSet<I>(ranges);
+  }
+
   // Constructs a range set. Any overlap in the ranges argument will be
   // removed.
   explicit RangeSet(const std::vector<Range<I>>& ranges,
@@ -78,6 +129,16 @@ class RangeSet {
 
   bool operator==(const RangeSet<I>& other) const {
     return ranges_ == other.ranges_;
+  }
+
+  I MinIndex() const {
+    CHECK(!ranges_.empty());
+    return ranges_.front().first;
+  }
+
+  I MaxIndex() const {
+    CHECK(!ranges_.empty());
+    return ranges_.back().first + ranges_.back().second - 1;
   }
 
  private:
@@ -455,6 +516,20 @@ class Storage {
     }
 
     return chunks_[base]->at(offset);
+  }
+
+  // Returns all values at a given set of ranges.
+  std::vector<T> ValuesAtRanges(const RangeSet<size_t>& ranges) const {
+    std::vector<T> out;
+    for (const auto& range : ranges.ranges()) {
+      size_t from = range.first;
+      size_t to = from + range.second;
+      for (size_t i = from; i < to; ++i) {
+        out.emplace_back(at(i));
+      }
+    }
+
+    return out;
   }
 
   void Add(T value) {

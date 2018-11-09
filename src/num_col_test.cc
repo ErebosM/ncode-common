@@ -69,6 +69,162 @@ TEST(RangeSet, OverlappingMerge) {
   ASSERT_EQ(ranges, set.ranges());
 }
 
+static bool IntersectsAll(const std::vector<RangeSet<>>& range_sets, size_t value) {
+  for (const RangeSet<>& range_set : range_sets) {
+    if (!range_set.ContainsIndex(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static RangeSet<> IntersectionSlow(const std::vector<RangeSet<>>& range_sets) {
+  size_t min = std::numeric_limits<size_t>::max();
+  size_t max = std::numeric_limits<size_t>::min();;
+  for (const auto& range_set : range_sets) {
+    min = std::min(min, range_set.MinIndex());
+    max = std::max(max, range_set.MaxIndex());
+  }
+
+  std::vector<Range<>> ranges;
+  for (size_t i = min; i <= max; ++i) {
+    if (IntersectsAll(range_sets, i)) {
+      ranges.emplace_back(i, 1);
+    }
+  }
+
+  return RangeSet<>(ranges);
+}
+
+TEST(RangeSet, IntersectionEmpty) {
+  RangeSet<> set_one({{10, 5}});
+  RangeSet<> set_two({{20, 15}});
+
+  std::vector<Range<>> ranges = {};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionSingleItem) {
+  RangeSet<> set_one({{10, 6}});
+  RangeSet<> set_two({{15, 15}});
+
+  std::vector<Range<>> ranges = {{15, 1}};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionLeft) {
+  RangeSet<> set_one({{10, 10}});
+  RangeSet<> set_two({{15, 15}});
+
+  std::vector<Range<>> ranges = {{15, 5}};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionFull) {
+  RangeSet<> set_one({{10, 10}});
+  RangeSet<> set_two({{10, 10}});
+
+  std::vector<Range<>> ranges = {{10, 10}};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionFullTwo) {
+  RangeSet<> set_one({{10, 10}});
+  RangeSet<> set_two({{0, 100}});
+
+  std::vector<Range<>> ranges = {{10, 10}};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionRight) {
+  RangeSet<> set_one({{20, 10}});
+  RangeSet<> set_two({{15, 10}});
+
+  std::vector<Range<>> ranges = {{20, 5}};
+  ASSERT_EQ(RangeSet<>(ranges), RangeSet<>::Intersection({set_one, set_two}));
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionMulti) {
+  RangeSet<> set_one({{20, 10}, {50, 5}});
+  RangeSet<> set_two({{25, 30}});
+
+  std::vector<Range<>> ranges = {{25, 5}, {50, 5}};
+  RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two});
+  ASSERT_EQ(RangeSet<>(ranges), merged) << merged.ToString();
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionMultiFull) {
+  RangeSet<> set_one({{20, 10}, {50, 5}});
+  RangeSet<> set_two({{20, 55}});
+
+  std::vector<Range<>> ranges = {{20, 10}, {50, 5}};
+  RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two});
+  ASSERT_EQ(RangeSet<>(ranges), merged) << merged.ToString();
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionMultiNone) {
+  RangeSet<> set_one({{20, 10}, {50, 5}});
+  RangeSet<> set_two({{40, 5}});
+
+  std::vector<Range<>> ranges = {};
+  RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two});
+  ASSERT_EQ(RangeSet<>(ranges), merged) << merged.ToString();
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionTwoOne) {
+  RangeSet<> set_one({{20, 10}, {50, 5}});
+  RangeSet<> set_two({{20, 10}});
+
+  std::vector<Range<>> ranges = {{20, 10}};
+  RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two});
+  ASSERT_EQ(RangeSet<>(ranges), merged) << merged.ToString();
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+TEST(RangeSet, IntersectionTwoTwo) {
+  RangeSet<> set_one({{20, 10}, {50, 5}});
+  RangeSet<> set_two({{20, 10}, {50, 5}});
+
+  std::vector<Range<>> ranges = {{20, 10}, {50, 5}};
+  RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two});
+  ASSERT_EQ(RangeSet<>(ranges), merged) << merged.ToString();
+  ASSERT_EQ(RangeSet<>(ranges), IntersectionSlow({set_one, set_two}));
+}
+
+static RangeSet<> GenerateRandom(std::mt19937* rnd, size_t max, size_t size, size_t count) {
+  std::vector<Range<>> ranges;
+  for (size_t i = 0; i < count; ++i) {
+    std::uniform_int_distribution<size_t> start_index_dist(0, max);
+    std::uniform_int_distribution<size_t> size_dist(1, size);
+
+    ranges.emplace_back(start_index_dist(*rnd), size_dist(*rnd));
+  }
+
+  return RangeSet<>(ranges);
+}
+
+TEST(RangeSet, IntersectionRandom) {
+  std::mt19937 rnd(1);
+  for (size_t i = 0; i < 10000; ++i) {
+    RangeSet<> set_one = GenerateRandom(&rnd, 100, 20, 3);
+    RangeSet<> set_two = GenerateRandom(&rnd, 100, 20, 3);
+    RangeSet<> set_three = GenerateRandom(&rnd, 100, 20, 3);
+
+    RangeSet<> merged = RangeSet<>::Intersection({set_one, set_two, set_three});
+    ASSERT_EQ(merged, IntersectionSlow({set_one, set_two, set_three}));
+  }
+}
+
 template <typename T>
 class ContainerTest : public ::testing::Test {};
 
