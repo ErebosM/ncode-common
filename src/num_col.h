@@ -53,6 +53,41 @@ class RangeSet {
  public:
   RangeSet() {}
 
+  RangeSet(RangeSet<I>&& other) { ranges_ = std::move(other.ranges_); }
+
+  RangeSet(const RangeSet<I>& other) { ranges_ = other.ranges_; }
+
+  RangeSet<I>& operator=(const RangeSet<I>& other) {
+    if (&other != this) {
+      ranges_ = other.ranges_;
+    }
+    return *this;
+  }
+
+  RangeSet<I>& operator=(RangeSet<I>&& other) {
+    if (&other != this) {
+      ranges_ = std::move(other.ranges_);
+    }
+    return *this;
+  }
+
+  // Returns a RangeSet that contains only ranges that are contained in at least
+  // one of the given sets.
+  static RangeSet<I> Union(const std::vector<RangeSet>& range_sets) {
+    CHECK(!range_sets.empty());
+    if (range_sets.size() == 1) {
+      return range_sets.front();
+    }
+
+    std::vector<Range<I>> all_ranges;
+    for (const auto& range_set : range_sets) {
+      all_ranges.insert(all_ranges.end(), range_set.ranges().begin(),
+                        range_set.ranges().end());
+    }
+
+    return RangeSet<I>(all_ranges);
+  }
+
   // Returns a RangeSet that contains only ranges that are contained in all of
   // the given range sets.
   static RangeSet<I> Intersection(const std::vector<RangeSet>& range_sets) {
@@ -519,13 +554,13 @@ class Storage {
   }
 
   // Returns all values at a given set of ranges.
-  std::vector<T> ValuesAtRanges(const RangeSet<size_t>& ranges) const {
+  std::vector<T> ValuesAtRanges(const RangeSet<>& ranges) const {
     std::vector<T> out;
     for (const auto& range : ranges.ranges()) {
       size_t from = range.first;
       size_t to = from + range.second;
       for (size_t i = from; i < to; ++i) {
-        out.emplace_back(at(i));
+        out.push_back(at(i));
       }
     }
 
@@ -1297,7 +1332,7 @@ DoubleStorageChunk<I>::DoubleStorageChunk(const std::vector<double>& values)
 template <typename I>
 double DoubleStorageChunk<I>::at(I index) const {
   if (double_vector_) {
-    return (*double_vector_)[index];
+    return double_vector_->at(index);
   }
 
   if (rle_) {

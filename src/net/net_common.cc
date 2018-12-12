@@ -13,10 +13,10 @@
 #include <tuple>
 #include <utility>
 
-#include "algorithm.h"
 #include "../map_util.h"
-#include "../substitute.h"
 #include "../stats.h"
+#include "../substitute.h"
+#include "algorithm.h"
 
 namespace nc {
 namespace net {
@@ -99,8 +99,8 @@ std::string GraphStorage::GetClusterName(const GraphNodeSet& nodes) const {
     return GetNode(*nodes.begin())->id();
   }
 
-  std::function<std::string(const GraphNodeIndex& node)> f = [this](
-      GraphNodeIndex node) { return GetNode(node)->id(); };
+  std::function<std::string(const GraphNodeIndex& node)> f =
+      [this](GraphNodeIndex node) { return GetNode(node)->id(); };
 
   std::string out = "C";
   Join(nodes.begin(), nodes.end(), "_", f, &out);
@@ -647,8 +647,8 @@ std::unique_ptr<Walk> GraphStorage::WalkFromStringOrDie(
     CHECK(src_and_dst.size() == 2) << "Path string malformed: " << path_string;
     std::string src = src_and_dst[0];
     std::string dst = src_and_dst[1];
-    CHECK(src.size() > 0 && dst.size() > 0) << "Path string malformed: "
-                                            << path_string;
+    CHECK(src.size() > 0 && dst.size() > 0)
+        << "Path string malformed: " << path_string;
     links.push_back(LinkOrDie(src, dst));
   }
 
@@ -725,10 +725,10 @@ bool operator>(const FiveTuple& a, const FiveTuple& b) {
 
 std::string IPToStringOrDie(IPAddress ip) {
   char str[INET_ADDRSTRLEN];
-  uint32_t address = htonl(ip.Raw());
+  uint32_t address = ip.Raw();
   const char* return_ptr = inet_ntop(AF_INET, &address, str, INET_ADDRSTRLEN);
-  CHECK(return_ptr != nullptr) << "Unable to convert IPv4 to string: "
-                               << strerror(errno);
+  CHECK(return_ptr != nullptr)
+      << "Unable to convert IPv4 to string: " << strerror(errno);
   return std::string(str);
 }
 
@@ -736,17 +736,30 @@ IPAddress StringToIPOrDie(const std::string& str) {
   uint32_t address;
   int return_value = inet_pton(AF_INET, str.c_str(), &address);
   CHECK(return_value != 0) << "Invalid IPv4 string: " << str;
-  CHECK(return_value != -1) << "Unable to convert string to IPv4: "
-                            << strerror(errno);
+  CHECK(return_value != -1)
+      << "Unable to convert string to IPv4: " << strerror(errno);
   CHECK(return_value == 1);
-  return IPAddress(ntohl(address));
+  return IPAddress(address);
 }
 
+static constexpr uint8_t kMaxIPAddressMaskLen = 32;
 IPAddress MaskAddress(IPAddress ip_address, uint8_t mask_len) {
   CHECK(mask_len <= kMaxIPAddressMaskLen);
-  uint8_t slack = kMaxIPAddressMaskLen - mask_len;
-  uint64_t mask = ~((1 << slack) - 1);
-  return IPAddress(ip_address.Raw() & mask);
+  uint64_t mask = ~0UL << (kMaxIPAddressMaskLen - mask_len);
+  return IPAddress(htonl(ntohl(ip_address.Raw()) & mask));
+}
+
+bool IPRange::Contains(const IPRange& other) const {
+  if (mask_len_ == 0) {
+    return true;
+  }
+
+  // The other range should be more specific and have the same prefix.
+  if (other.mask_len_ < mask_len_) {
+    return false;
+  }
+
+  return IPRange(other.base_address_, mask_len_) == *this;
 }
 
 IPRange::IPRange(IPAddress address, uint8_t mask_len)
@@ -763,7 +776,27 @@ IPRange::IPRange(const std::string& range_str)
 
   uint32_t mask_len;
   CHECK(safe_strtou32(mask_str, &mask_len)) << "Bad mask: " << mask_str;
+  CHECK(mask_len <= std::numeric_limits<uint8_t>::max())
+      << "Bad mask length: " << mask_str;
+
   Init(StringToIPOrDie(address_str), mask_len);
+}
+
+uint8_t IPRange::PrefixMatchLen(const IPRange& other) const {
+  uint8_t max_len = std::min(mask_len_, other.mask_len_);
+
+  uint32_t address_one = ntohl(base_address_.Raw());
+  uint32_t address_two = ntohl(other.base_address_.Raw());
+
+  uint8_t i;
+  for (i = 1; i <= max_len; ++i) {
+    if ((address_one & (1 << (32 - i))) !=
+        (address_two & (1 << (32 - i)))) {
+      break;
+    }
+  }
+
+  return i - 1;
 }
 
 std::string IPRange::ToString() const {
@@ -773,6 +806,37 @@ std::string IPRange::ToString() const {
 void IPRange::Init(IPAddress address, uint8_t mask_len) {
   mask_len_ = mask_len;
   base_address_ = MaskAddress(address, mask_len);
+}
+
+std::ostream& operator<<(std::ostream& output, const IPRange& op) {
+  output << op.ToString();
+  return output;
+}
+
+bool operator==(const IPRange& a, const IPRange& b) {
+  return std::tie(a.base_address_, a.mask_len_) ==
+         std::tie(b.base_address_, b.mask_len_);
+}
+
+bool operator!=(const IPRange& a, const IPRange& b) {
+  return std::tie(a.base_address_, a.mask_len_) !=
+         std::tie(b.base_address_, b.mask_len_);
+}
+
+bool operator<(const IPRange& a, const IPRange& b) {
+  uint32_t a_host_order = ntohl(a.base_address_.Raw());
+  uint32_t b_host_order = ntohl(b.base_address_.Raw());
+
+  return std::tie(a_host_order, a.mask_len_) <
+         std::tie(b_host_order, b.mask_len_);
+}
+
+bool operator>(const IPRange& a, const IPRange& b) {
+  uint32_t a_host_order = ntohl(a.base_address_.Raw());
+  uint32_t b_host_order = ntohl(b.base_address_.Raw());
+
+  return std::tie(a_host_order, a.mask_len_) >
+         std::tie(b_host_order, b.mask_len_);
 }
 
 std::string GraphLinkBase::ToString() const {
@@ -787,8 +851,8 @@ std::string GraphLinkBase::ToStringNoPorts() const {
 void GraphBuilder::AddLink(const GraphLinkBase& link) {
   CHECK(!link.src_id().empty()) << "missing src id";
   CHECK(!link.dst_id().empty()) << "missing dst id";
-  CHECK(link.src_id() != link.dst_id()) << "src id same as dst id: "
-                                        << link.src_id();
+  CHECK(link.src_id() != link.dst_id())
+      << "src id same as dst id: " << link.src_id();
 
   if (!auto_port_numbers_) {
     CHECK(link.src_port() != DevicePortNumber::Zero());
@@ -904,4 +968,4 @@ bool operator==(const GraphLinkBase& a, const GraphLinkBase& b) {
 }
 
 }  // namespace net
-}  // namespace ncode
+}  // namespace nc

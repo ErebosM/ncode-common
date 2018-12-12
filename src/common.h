@@ -152,8 +152,8 @@ class Index {
   static_assert(std::is_integral<V>::value, "Integral type needed");
   static_assert(std::is_unsigned<V>::value, "Unsigned type needed");
 
-  explicit Index() : m_val_(0) {}
-  explicit Index(V val) : m_val_(val) {}
+  explicit constexpr Index() : m_val_(0) {}
+  explicit constexpr Index(V val) : m_val_(val) {}
   operator size_t() const { return m_val_; }
 
  private:

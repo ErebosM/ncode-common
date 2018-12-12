@@ -3,13 +3,13 @@
 
 #include <stddef.h>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
-#include <chrono>
 
 #include "../common.h"
 #include "../logging.h"
@@ -147,8 +147,8 @@ class GraphLinkBase {
         dst_port_(dst_port),
         bandwidth_(bw),
         delay_(delay) {
-    CHECK(delay_ != Delay::zero()) << "Link has zero delay " << src << "->"
-                                   << dst;
+    CHECK(delay_ != Delay::zero())
+        << "Link has zero delay " << src << "->" << dst;
     CHECK(bandwidth_ != Bandwidth::Zero()) << "Link has zero bandwidth";
   }
 
@@ -697,7 +697,6 @@ std::string IPToStringOrDie(IPAddress ip);
 IPAddress StringToIPOrDie(const std::string& str);
 
 // Applies a mask to a given IPAddress.
-static constexpr uint8_t kMaxIPAddressMaskLen = 32;
 IPAddress MaskAddress(IPAddress ip_address, uint8_t mask);
 
 // An IPv4 range (combination of address and mask).
@@ -715,7 +714,19 @@ class IPRange {
   // The base address.
   IPAddress base_address() const { return base_address_; }
 
+  // Returns true if this range completely covers (or is equal to) another one.
+  bool Contains(const IPRange& other) const;
+
+  // Returns the length of the common prefix of this range and another.
+  uint8_t PrefixMatchLen(const IPRange& other) const;
+
   std::string ToString() const;
+
+  friend std::ostream& operator<<(std::ostream& output, const IPRange& op);
+  friend bool operator==(const IPRange& a, const IPRange& b);
+  friend bool operator!=(const IPRange& a, const IPRange& b);
+  friend bool operator<(const IPRange& a, const IPRange& b);
+  friend bool operator>(const IPRange& a, const IPRange& b);
 
  private:
   void Init(IPAddress address, uint8_t mask_len);
@@ -788,7 +799,7 @@ std::vector<std::set<T>> GetDisjointSets(
   return out;
 }
 
+}  // namespace net
 }  // namespace nc
-}  // namespace ncode
 
 #endif

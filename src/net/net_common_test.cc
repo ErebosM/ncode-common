@@ -3,9 +3,9 @@
 #include <limits>
 #include <utility>
 
+#include "../substitute.h"
 #include "gtest/gtest.h"
 #include "net_gen.h"
-#include "../substitute.h"
 
 namespace nc {
 namespace net {
@@ -217,6 +217,31 @@ TEST(IPRange, Slash16) {
   IPRange ip_range("1.2.3.4/16");
   ASSERT_EQ(16ul, ip_range.mask_len());
   ASSERT_EQ(StringToIPOrDie("1.2.0.0"), ip_range.base_address());
+}
+
+TEST(IPRange, MaskToString) {
+  IPRange ip_range("192.176.1.1/12");
+  ASSERT_EQ("192.176.0.0/12", ip_range.ToString());
+}
+
+TEST(IPRange, Contains) {
+  ASSERT_TRUE(IPRange("1.2.0.0/16").Contains(IPRange("1.2.0.0/16")));
+  ASSERT_TRUE(IPRange("1.2.0.0/16").Contains(IPRange("1.2.0.0/24")));
+  ASSERT_TRUE(IPRange("1.2.0.0/16").Contains(IPRange("1.2.3.0/24")));
+  ASSERT_FALSE(IPRange("1.2.0.0/16").Contains(IPRange("1.2.3.0/8")));
+  ASSERT_FALSE(IPRange("1.2.0.0/16").Contains(IPRange("1.3.0.0/16")));
+  ASSERT_FALSE(IPRange("1.2.0.0/16").Contains(IPRange("1.3.3.0/24")));
+  ASSERT_TRUE(IPRange("0.0.0.0/0").Contains(IPRange("10.0.0.0/7")));
+}
+
+TEST(IPRange, PrefixLen) {
+  ASSERT_EQ(16, IPRange("1.2.0.0/16").PrefixMatchLen(IPRange("1.2.0.0/16")));
+  ASSERT_EQ(16, IPRange("1.2.0.0/16").PrefixMatchLen(IPRange("1.2.0.0/24")));
+  ASSERT_EQ(8, IPRange("1.2.0.0/8").PrefixMatchLen(IPRange("1.2.0.0/16")));
+  ASSERT_EQ(15, IPRange("1.3.0.0/16").PrefixMatchLen(IPRange("1.2.0.0/16")));
+  ASSERT_EQ(13, IPRange("1.4.0.0/16").PrefixMatchLen(IPRange("1.2.0.0/16")));
+  ASSERT_EQ(
+      11, IPRange("192.176.0.0/12").PrefixMatchLen(IPRange("192.168.0.0/16")));
 }
 
 TEST(DisjointSets, Empty) {

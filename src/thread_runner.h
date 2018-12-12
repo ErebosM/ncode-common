@@ -2,12 +2,12 @@
 #define NCODE_COMMON_THREAD_RUNNER_H
 
 #include <stddef.h>
+#include <atomic>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <condition_variable>
-#include <mutex>
-#include <atomic>
 
 #include "common.h"
 
@@ -108,14 +108,14 @@ class ThreadBatchProcessor {
     }
   }
 
-  void RunInParallel(const std::vector<T>& arguments,
-                     std::function<void(const T&, size_t, size_t)> f) {
+  void RunInParallel(std::vector<T>* arguments,
+                     std::function<void(T*, size_t, size_t)> f) {
     {
       std::unique_lock<std::mutex> lock(mu_);
-      batch_arguments_ = &arguments;
+      batch_arguments_ = arguments;
       batch_f_ = &f;
 
-      batch_done_.resize(arguments.size(), false);
+      batch_done_.resize(arguments->size(), false);
 
       // Activate all threads.
       std::fill(active_threads_.begin(), active_threads_.end(), true);
@@ -146,14 +146,14 @@ class ThreadBatchProcessor {
         break;
       }
 
-      const std::vector<T>& arguments = *batch_arguments_;
-      const std::function<void(const T&, size_t, size_t)>& f = *batch_f_;
+      std::vector<T>& arguments = *batch_arguments_;
+      const std::function<void(T*, size_t, size_t)>& f = *batch_f_;
 
       for (size_t i = 0; i < arguments.size(); ++i) {
         if (!batch_done_[i]) {
           batch_done_[i] = true;
           lock.unlock();
-          f(arguments[i], i, thread_index);
+          f(&(arguments[i]), i, thread_index);
           lock.lock();
         }
       }
@@ -177,10 +177,10 @@ class ThreadBatchProcessor {
 
   // The arguments for the current batch.Either null if no batch, or points to
   // the stack of RunInParallel.
-  const std::vector<T>* batch_arguments_;
+  std::vector<T>* batch_arguments_;
 
   // Function for the current batch.
-  std::function<void(const T&, size_t, size_t)>* batch_f_;
+  std::function<void(T*, size_t, size_t)>* batch_f_;
 
   // The processors.
   std::vector<std::thread> threads_;
@@ -196,6 +196,6 @@ class ThreadBatchProcessor {
   std::mutex mu_;
 };
 
-}  // namespace common
+}  // namespace nc
 
 #endif

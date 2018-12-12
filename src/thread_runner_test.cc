@@ -1,8 +1,8 @@
 #include <mutex>
 
 #include "common.h"
-#include "thread_runner.h"
 #include "gtest/gtest.h"
+#include "thread_runner.h"
 
 namespace nc {
 namespace {
@@ -20,10 +20,12 @@ TEST_P(ThreadRunnerTestWithBatchSize, SimpleIO) {
   std::iota(args.begin(), args.end(), 0);
 
   std::set<int> out;
-  RunInParallel<int>(args, [&out, &mu](int i) {
-    std::lock_guard<std::mutex> lock(mu);
-    out.insert(i);
-  }, GetParam());
+  RunInParallel<int>(args,
+                     [&out, &mu](int i) {
+                       std::lock_guard<std::mutex> lock(mu);
+                       out.insert(i);
+                     },
+                     GetParam());
 
   std::set<int> model(args.begin(), args.end());
   ASSERT_EQ(model, out);
@@ -43,12 +45,13 @@ TEST_P(ThreadBatchProcessorTestWithBatchSize, SimpleIO) {
   std::iota(args.begin(), args.end(), 0);
 
   std::set<int> out;
-  batch_processor.RunInParallel(args, [&out, &mu](int i, size_t k, size_t t) {
-    Unused(k);
-    Unused(t);
-    std::lock_guard<std::mutex> lock(mu);
-    out.insert(i);
-  });
+  batch_processor.RunInParallel(&args,
+                                [&out, &mu](int* i_ptr, size_t k, size_t t) {
+                                  Unused(k);
+                                  Unused(t);
+                                  std::lock_guard<std::mutex> lock(mu);
+                                  out.insert(*i_ptr);
+                                });
 
   std::set<int> model(args.begin(), args.end());
   ASSERT_EQ(model, out);

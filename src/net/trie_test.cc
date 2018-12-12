@@ -21,10 +21,6 @@ class TrieTest : public ::testing::Test {
 
 TEST_F(TrieTest, BadAdd) { ASSERT_DEATH(trie_.Add({}, 0), ".*"); }
 
-TEST_F(TrieTest, BadPrefix) {
-  ASSERT_DEATH(trie_.SequencesWithPrefix({}), ".*");
-}
-
 TEST_F(TrieTest, SingleWord) {
   trie_.Add(ToV("BLAH"), 0);
 
@@ -33,6 +29,8 @@ TEST_F(TrieTest, SingleWord) {
   ASSERT_EQ(V({0}), trie_.SequencesWithPrefix(ToV("B")));
   ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("ZLAH")));
   ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("BLAHZ")));
+  ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("BLAZ")));
+  ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("BLAZ")));
 }
 
 TEST_F(TrieTest, SingleWordTwice) {
@@ -57,6 +55,23 @@ TEST_F(TrieTest, MultiWord) {
   ASSERT_EQ(V({1}), trie_.SequencesWithPrefix(ToV("BLAHZ")));
   ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("ZLAB")));
   ASSERT_EQ(V({}), trie_.SequencesWithPrefix(ToV("BLAHK")));
+  ASSERT_EQ(V({0, 1, 2, 3}), trie_.SequencesWithPrefix(ToV("")));
+}
+
+class IPRangeTrieTest : public ::testing::Test {
+ protected:
+  IPRangeTrie<int> trie_;
+};
+
+TEST_F(IPRangeTrieTest, SingleRange) {
+  trie_.Add(IPRange("10.1.0.0/16"), 1);
+
+  std::vector<int> model = {1};
+  ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("10.0.0.0/8")));
+  ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("10.1.0.0/16")));
+  ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("0.0.0.0/0")));
+  ASSERT_TRUE(trie_.ValuesWithPrefix(IPRange("11.0.0.0/8")).empty());
+  ASSERT_TRUE(trie_.ValuesWithPrefix(IPRange("10.2.0.0/16")).empty());
 }
 
 }  // namespace

@@ -5,6 +5,7 @@
 #include "../logging.h"
 #include "../stats.h"
 #include "../substitute.h"
+#include "net_common.h"
 
 namespace nc {
 namespace net {
@@ -24,8 +25,8 @@ struct TrieStats {
 
 template <typename T, typename V>
 struct TrieNode {
-  // The sequences that share the same prefix.
-  std::vector<V> sequences;
+  // The values that share the same prefix.
+  std::vector<V> values;
 
   // This node's children.
   std::vector<std::pair<T, TrieNode<T, V>>> children;
@@ -36,15 +37,19 @@ class Trie {
  public:
   // Adds a sequence of elements to this trie. The sequence is identified by a
   // value, which will later be returned by calls to SequencesWithPrefix.
-  void Add(const std::vector<T>& sequence, V sequence_id) {
+  void Add(const std::vector<T>& sequence, V value) {
     CHECK(!sequence.empty());
-    AddRecursive(sequence, sequence_id, 0, &root_);
+    AddRecursive(sequence, value, 0, &root_);
   }
 
-  // Returns the sequences that have a given prefix. Reference only valid until
+  // Returns the values that have a given prefix. Reference only valid until
   // next call to Add.
   const std::vector<V>& SequencesWithPrefix(
       const std::vector<T>& prefix) const {
+    if (prefix.empty()) {
+      return root_.values;
+    }
+
     CHECK(!prefix.empty());
     return HasPrefixRecursive(prefix, 0, &root_);
   }
@@ -60,8 +65,9 @@ class Trie {
   }
 
  private:
-  void AddRecursive(const std::vector<T>& sequence, V sequence_id, size_t from,
+  void AddRecursive(const std::vector<T>& sequence, V value, size_t from,
                     TrieNode<T, V>* at) {
+    at->values.emplace_back(value);
     if (from == sequence.size()) {
       return;
     }
@@ -82,8 +88,7 @@ class Trie {
       node_ptr = &at->children.back().second;
     }
 
-    node_ptr->sequences.emplace_back(sequence_id);
-    AddRecursive(sequence, sequence_id, from + 1, node_ptr);
+    AddRecursive(sequence, value, from + 1, node_ptr);
   }
 
   const std::vector<V>& HasPrefixRecursive(const std::vector<T>& prefix,
@@ -105,7 +110,7 @@ class Trie {
     }
 
     if (from == prefix.size() - 1) {
-      return in_trie->sequences;
+      return in_trie->values;
     }
 
     return HasPrefixRecursive(prefix, from + 1, in_trie);
@@ -115,7 +120,7 @@ class Trie {
                               std::vector<size_t>* children_counts) const {
     stats->size_bytes +=
         at.children.size() * sizeof(std::pair<T, TrieNode<T, V>>);
-    stats->size_bytes += at.sequences.size() * sizeof(V);
+    stats->size_bytes += at.values.size() * sizeof(V);
     children_counts->emplace_back(at.children.size());
     stats->num_nodes += at.children.size();
 
@@ -129,7 +134,33 @@ class Trie {
   TrieNode<T, V> root_;
 };
 
-}  // namespace nc
+template <typename T>
+class IPRangeTrie {
+ public:
+  void Add(const IPRange& ip_range, const T& value) {
+    trie_.Add(ToBoolVector(ip_range), value);
+  }
+
+  const std::vector<T>& ValuesWithPrefix(const IPRange& ip_range) const {
+    return trie_.SequencesWithPrefix(ToBoolVector(ip_range));
+  }
+
+ private:
+  static std::vector<bool> ToBoolVector(const IPRange& ip_range) {
+    uint32_t range_net_order = htonl(ip_range.base_address().Raw());
+    std::vector<bool> bits_vector(ip_range.mask_len());
+    for (size_t i = 0; i < ip_range.mask_len(); ++i) {
+      bool bit_value = range_net_order & (1 << i);
+      bits_vector[i] = bit_value;
+    }
+
+    return bits_vector;
+  }
+
+  Trie<bool, T> trie_;
+};
+
 }  // namespace net
+}  // namespace nc
 
 #endif
