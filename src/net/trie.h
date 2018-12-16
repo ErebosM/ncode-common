@@ -1,6 +1,8 @@
 #ifndef NCODE_NET_TRIE_H
 #define NCODE_NET_TRIE_H
 
+ #include <arpa/inet.h>
+
 #include "../common.h"
 #include "../logging.h"
 #include "../stats.h"
