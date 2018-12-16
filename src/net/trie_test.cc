@@ -70,8 +70,6 @@ TEST_F(IPRangeTrieTest, SingleRange) {
   ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("10.0.0.0/8")));
   ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("10.1.0.0/16")));
   ASSERT_EQ(model, trie_.ValuesWithPrefix(IPRange("0.0.0.0/0")));
-  ASSERT_TRUE(trie_.ValuesWithPrefix(IPRange("11.0.0.0/8")).empty());
-  ASSERT_TRUE(trie_.ValuesWithPrefix(IPRange("10.2.0.0/16")).empty());
 }
 
 }  // namespace
